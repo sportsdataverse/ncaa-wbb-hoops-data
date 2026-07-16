@@ -6,4 +6,14 @@ sibling ``ncaa-wbb-hoops-raw`` per-game JSON into season-level parquet/csv +
 manifest and publishes to the ``ncaa_wbb_*`` release tags.
 """
 
-__all__ = ["config", "ingest", "io", "build", "publish", "reshapers"]
+__all__ = [
+    "config",
+    "ingest",
+    "io",
+    "build",
+    "publish",
+    "reshapers",
+    "derived",
+    "rds",
+    "cli",
+]
