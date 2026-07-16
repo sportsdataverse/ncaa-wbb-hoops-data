@@ -40,6 +40,9 @@ def test_publish_creates_release_when_absent(tmp_path: Path):
 
     creates = [c for c in calls if c[:2] == ["release", "create"]]
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
+    # Total call count: catches an injected extra call (e.g. a stray
+    # `release delete`) that individual argv assertions below wouldn't notice.
+    assert len(calls) == 4
     assert len(creates) == 1
     assert creates[0][2] == "ncaa_wbb_pbp"
     assert "--repo" in creates[0] and DEFAULT_REPO in creates[0]
@@ -67,6 +70,7 @@ def test_publish_skips_create_when_release_present(tmp_path: Path):
         make_rds=False,
     )
 
+    assert len(calls) == 3
     assert not any(c[:2] == ["release", "create"] for c in calls)
     assert sum(1 for c in calls if c[:2] == ["release", "upload"]) == 3
 
@@ -105,6 +109,7 @@ def test_publish_only_parquet_staged_uploads_one_file(tmp_path: Path):
     )
 
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
+    assert len(calls) == 1
     assert len(uploads) == 1
     assert result["uploaded"] == 1
 
@@ -141,6 +146,7 @@ def test_publish_make_rds_stages_and_uploads_rds(tmp_path: Path, monkeypatch):
     rds_path = tmp_path / "wbb" / "_release_build" / "pbp" / "pbp_2025.rds"
     assert rds_path.exists()
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
+    assert len(calls) == 2
     assert len(uploads) == 2
     assert result["uploaded"] == 2
 
@@ -165,5 +171,6 @@ def test_publish_make_rds_failure_still_uploads_parquet(tmp_path: Path, monkeypa
     )
 
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
+    assert len(calls) == 1
     assert len(uploads) == 1
     assert result["uploaded"] == 1
