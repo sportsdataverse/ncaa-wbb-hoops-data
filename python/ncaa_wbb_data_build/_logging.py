@@ -1,8 +1,9 @@
 """Pipeline logging -- timestamped lines on stdout.
 
 Everything the pipeline reports flows through one ``ncaa_wbb_data_build`` logger
-writing to *stdout* (not stderr), because the daily processor tees stdout into
-the per-season rotating logfile (``logs/ncaa_wbb_data_logfile_{season}.log``)
+writing to *stdout* (not stderr), because ``scripts/run_build.sh`` /
+``scripts/run_publish.sh`` tee stdout into a per-run logfile
+(``logs/run_build_<timestamp>.log`` / ``logs/run_publish_<timestamp>.log``)
 -- the same paradigm as the other ``-data`` repos. Each record is flushed on
 emit so lines land in the Actions console and the tee'd file in real time.
 
