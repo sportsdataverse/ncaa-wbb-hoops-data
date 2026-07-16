@@ -26,7 +26,7 @@ from pathlib import Path
 
 import polars as pl
 
-from ncaa_wbb_data_build.config import RAW_HTTP_BASE, RAW_ROOT_ENV
+from ncaa_wbb_data_build.config import RAW_ROOT_ENV
 
 
 def _resolve_root(explicit: str | Path | None) -> Path | str:
@@ -84,7 +84,9 @@ def read_parsed(contest_id: str, *, raw_root: str | Path | None = None) -> dict 
             return json.loads(cached.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
             return None
-    body = _http_get_bytes(f"{RAW_HTTP_BASE}/json/{contest_id}.json")
+    # `root` is the resolved HTTP base -- honor an explicit raw_root= URL
+    # instead of silently falling back to the RAW_HTTP_BASE default.
+    body = _http_get_bytes(f"{root}/json/{contest_id}.json")
     if body is None:
         return None
     try:
@@ -114,7 +116,9 @@ def season_contest_ids(season: int, *, raw_root: str | Path | None = None) -> li
             return []
         df = pl.read_parquet(f)
     else:
-        body = _http_get_bytes(f"{RAW_HTTP_BASE}/schedule_master.parquet")
+        # Same fix as read_parsed: use the resolved root, not the hardcoded
+        # default, so an explicit raw_root= URL is honored.
+        body = _http_get_bytes(f"{root}/schedule_master.parquet")
         if body is None:
             return []
         df = pl.read_parquet(io.BytesIO(body))
