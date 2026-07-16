@@ -1,7 +1,7 @@
 [project]
 name = "ncaa-wbb-hoops-data"
 version = "0.1.0"
-description = "Python producer for the ESPN NCAA women's basketball release datasets (parquet/csv), reshaping ncaa-wbb-hoops-raw into season-level tidy datasets."
+description = "Python producer for the stats.ncaa.org NCAA women's basketball release datasets (parquet/csv), reshaping ncaa-wbb-hoops-raw into season-level tidy datasets."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

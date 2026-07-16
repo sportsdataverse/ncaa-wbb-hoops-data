@@ -90,7 +90,7 @@ def publish_dataset(
 
             from ncaa_wbb_data_build.config import REGISTRY
             from ncaa_wbb_data_build import publish
-            publish.publish_dataset(REGISTRY["team_box"], 2026, base="build")
+            publish.publish_dataset(REGISTRY["team_box"], 2025, base="build")
     """
     run = runner or _gh
     exists = exists_check or _gh_release_exists

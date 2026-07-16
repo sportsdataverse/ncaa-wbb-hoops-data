@@ -1,7 +1,9 @@
 # ncaa-wbb-hoops-data
 
 Python producer that reshapes [`ncaa-wbb-hoops-raw`](https://github.com/sportsdataverse/ncaa-wbb-hoops-raw)'s
-parsed ESPN NCAA women's basketball JSON into season-level tidy datasets. Sister
+parsed `stats.ncaa.org` women's basketball JSON into season-level tidy datasets.
+The upstream source is `stats.ncaa.org` (via the bigballR/wbigballR port in
+sdv-py) -- **not** ESPN; NCAA contest ids are strings, not ESPN ints. Sister
 repo to the wehoop (WNBA) and hoopR (NBA/MBB) data producers -- same
 build -> publish shape, different sport/league; a retarget of
 [`ncaa-mbb-hoops-data`](https://github.com/sportsdataverse/ncaa-mbb-hoops-data).
@@ -90,7 +92,7 @@ This repo consumes the output of the Phase-1 raw scraper,
 everywhere in this package -- never cast to `Int64`.
 
 **No real season data exists yet.** The Phase-1 live backfill against
-`stats.ncaa.org` / ESPN has not been run (it's a user-run job from a
+`stats.ncaa.org` has not been run (it's a user-run job from a
 residential IP -- see `ncaa-wbb-hoops-raw`'s README). This builder currently
 has only the 4-game hermetic fixture bundled under
 `python/tests/fixtures/raw_root/wbb/` (season 2025). Running `run_build.sh`
