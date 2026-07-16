@@ -173,9 +173,19 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Cursor  
-#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to 
+# Cursor
+#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# ncaa-wbb-hoops-data: release build staging (csv/rds are re-derivable from the
+# committed parquet under wbb/{dataset}/parquet/, which IS tracked -- do not
+# add a blanket *.parquet ignore here).
+wbb/_release_build/
+wbb/_release_build/**/*.csv
+wbb/_release_build/**/*.rds
+
+# HTTP-mode raw-JSON cache (see python/ncaa_wbb_data_build/ingest.py)
+.ncaa_wbb_raw_cache/
