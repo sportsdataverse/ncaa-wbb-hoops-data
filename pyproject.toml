@@ -1,0 +1,33 @@
+[project]
+name = "ncaa-wbb-hoops-data"
+version = "0.1.0"
+description = "Python producer for the ESPN NCAA women's basketball release datasets (parquet/csv), reshaping ncaa-wbb-hoops-raw into season-level tidy datasets."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "polars>=1.0,<2.0",
+    "sportsdataverse",
+    "tqdm",
+    "requests",
+]
+
+[project.scripts]
+ncaa-wbb-data-build = "ncaa_wbb_data_build.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+# sdv-py's NCAA parsers (ncaa_wbb_team_ids, etc.) are not yet on PyPI, so the
+# derived datasets resolve `sportsdataverse` to the local sibling checkout
+# (editable). Swap to the PyPI pin once a release ships NCAA support.
+[tool.uv.sources]
+sportsdataverse = { path = "../../sdv-py", editable = true }
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["ncaa_wbb_data_build*"]
