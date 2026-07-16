@@ -29,7 +29,9 @@ def _has_arrow(rscript: str | None) -> bool:
 
 _has_rscript_with_arrow = _has_arrow(_rscript)
 
-_needs_r = pytest.mark.skipif(not _has_rscript_with_arrow, reason="Rscript with arrow not available")
+_needs_r = pytest.mark.skipif(
+    not _has_rscript_with_arrow, reason="Rscript with arrow not available"
+)
 
 
 def test_to_rds_no_rscript_found_raises_runtime_error(tmp_path: Path, monkeypatch):

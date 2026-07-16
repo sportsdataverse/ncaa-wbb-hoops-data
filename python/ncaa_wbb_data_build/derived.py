@@ -38,7 +38,9 @@ def team_ids(season: int) -> pl.DataFrame:
 
     season_str = f"{season - 1}-{str(season)[-2:]}"
     df = ncaa_wbb_team_ids()
-    return df.filter(pl.col("season") == season_str).with_columns(pl.col("id").cast(pl.Utf8))
+    return df.filter(pl.col("season") == season_str).with_columns(
+        pl.col("id").cast(pl.Utf8)
+    )
 
 
 def schedule(finals: list[dict], season: int) -> pl.DataFrame:
@@ -52,7 +54,9 @@ def schedule(finals: list[dict], season: int) -> pl.DataFrame:
     for final in finals:
         pbp = final.get("pbp") or []
         if not pbp:
-            logger.warning("skipping schedule row for %s: empty pbp", final.get("contest_id"))
+            logger.warning(
+                "skipping schedule row for %s: empty pbp", final.get("contest_id")
+            )
             continue
         home_score = max((r.get("home_score") or 0) for r in pbp)
         away_score = max((r.get("away_score") or 0) for r in pbp)

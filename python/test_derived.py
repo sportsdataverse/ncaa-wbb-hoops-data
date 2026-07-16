@@ -7,11 +7,16 @@ import polars as pl
 
 from ncaa_wbb_data_build.derived import rosters, schedule, team_ids
 
-FIXTURES_DIR = Path(__file__).parent / "tests" / "fixtures" / "raw_root" / "wbb" / "json"
+FIXTURES_DIR = (
+    Path(__file__).parent / "tests" / "fixtures" / "raw_root" / "wbb" / "json"
+)
 
 
 def _load_finals() -> list[dict]:
-    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(FIXTURES_DIR.glob("*.json"))]
+    return [
+        json.loads(p.read_text(encoding="utf-8"))
+        for p in sorted(FIXTURES_DIR.glob("*.json"))
+    ]
 
 
 def test_team_ids_2025_season_is_non_empty():

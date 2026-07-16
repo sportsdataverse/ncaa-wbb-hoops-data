@@ -10,7 +10,9 @@ from __future__ import annotations
 import polars as pl
 
 
-def extract_family(final: dict, family: str, *, season: int, contest_id: str) -> pl.DataFrame:
+def extract_family(
+    final: dict, family: str, *, season: int, contest_id: str
+) -> pl.DataFrame:
     """Build the family's frame from one game's parsed JSON, tagged with contest_id/season.
 
     ``contest_id`` always overwrites any value already present in the rows,

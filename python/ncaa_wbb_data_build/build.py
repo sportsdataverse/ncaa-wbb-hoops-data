@@ -72,10 +72,20 @@ def build_season(
                 season,
             )
             return pl.DataFrame()
-        finals = [f for cid in contest_ids if (f := ingest.read_parsed(cid, raw_root=root)) is not None]
-        out = derived.schedule(finals, season) if dataset == "schedule" else derived.rosters(finals, season)
+        finals = [
+            f
+            for cid in contest_ids
+            if (f := ingest.read_parsed(cid, raw_root=root)) is not None
+        ]
+        out = (
+            derived.schedule(finals, season)
+            if dataset == "schedule"
+            else derived.rosters(finals, season)
+        )
     else:
-        raise ValueError(f"{dataset}: no DIRECT family and no DERIVED builder registered")
+        raise ValueError(
+            f"{dataset}: no DIRECT family and no DERIVED builder registered"
+        )
 
     if out.height == 0:
         # _build_direct already warns (empty contest_ids or 0 games extracted)
@@ -102,32 +112,46 @@ def build_season(
     return out
 
 
-def _build_direct(dataset: str, family: str, season: int, root: str | Path) -> pl.DataFrame:
+def _build_direct(
+    dataset: str, family: str, season: int, root: str | Path
+) -> pl.DataFrame:
     """DIRECT-path loop: per-game read + extract + concat, one bad game skipped."""
     contest_ids = ingest.season_contest_ids(season, raw_root=root)
     if not contest_ids:
-        log.warning("%s %s: no contest_ids in schedule_master; nothing built", dataset, season)
+        log.warning(
+            "%s %s: no contest_ids in schedule_master; nothing built", dataset, season
+        )
         return pl.DataFrame()
 
-    log.info("%s %s: per-game build starting -- %d games", dataset, season, len(contest_ids))
+    log.info(
+        "%s %s: per-game build starting -- %d games", dataset, season, len(contest_ids)
+    )
     frames: list[pl.DataFrame] = []
     missing = 0
     failed = 0
-    for n, cid in enumerate(tqdm(contest_ids, desc=f"{dataset} {season}", disable=None), start=1):
+    for n, cid in enumerate(
+        tqdm(contest_ids, desc=f"{dataset} {season}", disable=None), start=1
+    ):
         final = ingest.read_parsed(cid, raw_root=root)
         if final is None:
             missing += 1
             continue
         try:
-            frame = reshapers.extract_family(final, family, season=season, contest_id=cid)
+            frame = reshapers.extract_family(
+                final, family, season=season, contest_id=cid
+            )
         except Exception as e:  # one bad game must not abort the season
-            log.warning("%s %s: extract failed for game %s: %s", dataset, season, cid, e)
+            log.warning(
+                "%s %s: extract failed for game %s: %s", dataset, season, cid, e
+            )
             failed += 1
             continue
         if frame.height:
             frames.append(frame)
         if not sys.stderr.isatty() and n % _PROGRESS_EVERY == 0:
-            log.info("%s %s: %d/%d games processed", dataset, season, n, len(contest_ids))
+            log.info(
+                "%s %s: %d/%d games processed", dataset, season, n, len(contest_ids)
+            )
 
     if missing:
         log.warning(

@@ -7,7 +7,15 @@ import polars as pl
 
 from ncaa_wbb_data_build.reshapers import extract_family
 
-FIXTURE = Path(__file__).parent / "tests" / "fixtures" / "raw_root" / "wbb" / "json" / "5722355.json"
+FIXTURE = (
+    Path(__file__).parent
+    / "tests"
+    / "fixtures"
+    / "raw_root"
+    / "wbb"
+    / "json"
+    / "5722355.json"
+)
 
 FAMILY_HEIGHTS = {
     "pbp": 460,
@@ -27,7 +35,9 @@ def test_extract_family_all_six_families_from_real_fixture():
     final = _load_fixture()
     for fam, expected_height in FAMILY_HEIGHTS.items():
         df = extract_family(final, fam, season=2025, contest_id="5722355")
-        assert df.height == expected_height, f"{fam}: expected {expected_height}, got {df.height}"
+        assert df.height == expected_height, (
+            f"{fam}: expected {expected_height}, got {df.height}"
+        )
         assert df.height > 0
         assert "contest_id" in df.columns
         assert "season" in df.columns

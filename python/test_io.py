@@ -11,7 +11,9 @@ SPEC = REGISTRY["pbp"]
 
 
 def _frame(n: int) -> pl.DataFrame:
-    return pl.DataFrame({"game_id": list(range(n)), "value": [float(i) for i in range(n)]})
+    return pl.DataFrame(
+        {"game_id": list(range(n)), "value": [float(i) for i in range(n)]}
+    )
 
 
 def test_release_false_writes_only_parquet_no_csv_anywhere(tmp_path: Path):

@@ -16,7 +16,9 @@ RAW_ROOT_ENV = "NCAA_WBB_RAW_ROOT"
 
 # HTTP fallback base when the sibling raw checkout isn't available locally
 # (Task 3 ingest).
-RAW_HTTP_BASE = "https://raw.githubusercontent.com/sportsdataverse/ncaa-wbb-hoops-raw/main/wbb"
+RAW_HTTP_BASE = (
+    "https://raw.githubusercontent.com/sportsdataverse/ncaa-wbb-hoops-raw/main/wbb"
+)
 
 
 @dataclass(frozen=True)
@@ -45,8 +47,12 @@ REGISTRY: dict[str, DatasetSpec] = {
     # DIRECT: family == dataset key (parsed-JSON key equals the dataset key).
     "pbp": DatasetSpec("pbp", "pbp", _T + "pbp", "pbp"),
     "lineups": DatasetSpec("lineups", "lineups", _T + "lineups", "lineups"),
-    "possessions": DatasetSpec("possessions", "possessions", _T + "possessions", "possessions"),
-    "player_box": DatasetSpec("player_box", "player_box", _T + "player_box", "player_box"),
+    "possessions": DatasetSpec(
+        "possessions", "possessions", _T + "possessions", "possessions"
+    ),
+    "player_box": DatasetSpec(
+        "player_box", "player_box", _T + "player_box", "player_box"
+    ),
     "team_box": DatasetSpec("team_box", "team_box", _T + "team_box", "team_box"),
     "shots": DatasetSpec("shots", "shots", _T + "shots", "shots"),
     # DERIVED: no parsed-JSON family, built from other datasets.

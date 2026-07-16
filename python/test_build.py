@@ -88,7 +88,10 @@ def test_build_season_skips_one_bad_game_not_whole_season(tmp_path: Path, monkey
     out = build_season("pbp", 2025, base=tmp_path, raw_root=RAW_ROOT)
 
     good_games_height = _fixture_family_height("pbp") - len(
-        json.loads((JSON_DIR / f"{bad_cid}.json").read_text(encoding="utf-8")).get("pbp") or []
+        json.loads((JSON_DIR / f"{bad_cid}.json").read_text(encoding="utf-8")).get(
+            "pbp"
+        )
+        or []
     )
     assert out.height == good_games_height
     assert bad_cid not in out.get_column("contest_id").to_list()

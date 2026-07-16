@@ -38,7 +38,9 @@ def manifest_path(spec: DatasetSpec, base: Path) -> Path:
     return base / _LEAGUE / spec.dataset / "manifest.csv"
 
 
-def _upsert_manifest(spec: DatasetSpec, season: int, row_count: int, base: Path) -> Path:
+def _upsert_manifest(
+    spec: DatasetSpec, season: int, row_count: int, base: Path
+) -> Path:
     """Upsert one ``(dataset, season)`` row into the dataset's manifest, keep latest.
 
     Unlike an append log, this keeps exactly one row per season so idempotent
@@ -58,7 +60,9 @@ def _upsert_manifest(spec: DatasetSpec, season: int, row_count: int, base: Path)
     )
     if f.exists():
         existing = pl.read_csv(f, schema=_MANIFEST_SCHEMA)
-        existing = existing.filter(~((pl.col("dataset") == spec.dataset) & (pl.col("season") == int(season))))
+        existing = existing.filter(
+            ~((pl.col("dataset") == spec.dataset) & (pl.col("season") == int(season)))
+        )
         row = pl.concat([existing, row], how="vertical")
     row = row.sort("season")
     row.write_csv(f)

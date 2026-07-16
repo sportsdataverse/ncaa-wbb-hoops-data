@@ -34,7 +34,9 @@ def _find_rscript() -> str | None:
     if on_path:
         return on_path
 
-    candidates = sorted(Path("C:/Program Files/R").glob("R-*/bin/Rscript.exe"), reverse=True)
+    candidates = sorted(
+        Path("C:/Program Files/R").glob("R-*/bin/Rscript.exe"), reverse=True
+    )
     for candidate in candidates:
         if candidate.exists():
             return str(candidate)
@@ -42,7 +44,9 @@ def _find_rscript() -> str | None:
     return None
 
 
-def to_rds(parquet_path: str | Path, rds_path: str | Path, *, rscript: str | None = None) -> Path:
+def to_rds(
+    parquet_path: str | Path, rds_path: str | Path, *, rscript: str | None = None
+) -> Path:
     """Convert a parquet file to ``.rds`` via ``Rscript`` + R's ``arrow`` package.
 
     Raises ``RuntimeError`` if no Rscript is found, or if the conversion fails
@@ -67,5 +71,7 @@ def to_rds(parquet_path: str | Path, rds_path: str | Path, *, rscript: str | Non
         text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"Rscript conversion failed (exit {result.returncode}): {result.stderr}")
+        raise RuntimeError(
+            f"Rscript conversion failed (exit {result.returncode}): {result.stderr}"
+        )
     return rds_path
