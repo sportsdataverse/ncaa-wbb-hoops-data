@@ -47,14 +47,27 @@ def _gh_release_exists(tag: str, repo: str) -> bool:
     )
 
 
-def _dataset_files(spec: DatasetSpec, season: int, base: Path) -> list[Path]:
+def _dataset_paths(spec: DatasetSpec, season: int, base: Path) -> dict[str, Path]:
+    """The three release-asset paths for one dataset/season (parquet/csv/rds).
+
+    Single source of truth for path construction -- both ``_dataset_files``
+    and ``publish_dataset``'s rds-staging step need these, and a desync
+    between two independent constructions is a silent-miss risk.
+    """
     release_dir = base / _LEAGUE / "_release_build" / spec.dataset
-    cands = [
-        base / _LEAGUE / spec.dataset / "parquet" / f"{spec.stem}_{season}.parquet",
-        release_dir / f"{spec.stem}_{season}.csv",
-        release_dir / f"{spec.stem}_{season}.rds",
-    ]
-    return [f for f in cands if f.exists()]
+    return {
+        "parquet": base
+        / _LEAGUE
+        / spec.dataset
+        / "parquet"
+        / f"{spec.stem}_{season}.parquet",
+        "csv": release_dir / f"{spec.stem}_{season}.csv",
+        "rds": release_dir / f"{spec.stem}_{season}.rds",
+    }
+
+
+def _dataset_files(spec: DatasetSpec, season: int, base: Path) -> list[Path]:
+    return [f for f in _dataset_paths(spec, season, base).values() if f.exists()]
 
 
 def publish_dataset(
@@ -97,16 +110,9 @@ def publish_dataset(
     base = Path(base)
 
     if make_rds:
-        parquet = (
-            base / _LEAGUE / spec.dataset / "parquet" / f"{spec.stem}_{season}.parquet"
-        )
-        rds_path = (
-            base
-            / _LEAGUE
-            / "_release_build"
-            / spec.dataset
-            / f"{spec.stem}_{season}.rds"
-        )
+        paths = _dataset_paths(spec, season, base)
+        parquet = paths["parquet"]
+        rds_path = paths["rds"]
         # Regenerate the rds when it's missing OR stale (parquet rebuilt since):
         # a prior run's rds must never be uploaded against a freshly written parquet.
         if parquet.exists() and (
