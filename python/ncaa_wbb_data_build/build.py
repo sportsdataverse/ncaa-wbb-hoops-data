@@ -63,7 +63,9 @@ def build_season(
         out = _build_direct(dataset, spec.family, season, root)
     elif dataset == "team_ids":
         out = derived.team_ids(season)
-    elif dataset in ("schedule", "rosters"):
+    elif dataset == "team_rosters":
+        out = derived.team_rosters(season, root)
+    elif dataset in ("schedule", "rosters", "matchup_stints"):
         contest_ids = ingest.season_contest_ids(season, raw_root=root)
         if not contest_ids:
             log.warning(
@@ -77,11 +79,12 @@ def build_season(
             for cid in contest_ids
             if (f := ingest.read_parsed(cid, raw_root=root)) is not None
         ]
-        out = (
-            derived.schedule(finals, season)
-            if dataset == "schedule"
-            else derived.rosters(finals, season)
-        )
+        builder = {
+            "schedule": derived.schedule,
+            "rosters": derived.rosters,
+            "matchup_stints": derived.matchup_stints,
+        }[dataset]
+        out = builder(finals, season)
     else:
         raise ValueError(
             f"{dataset}: no DIRECT family and no DERIVED builder registered"

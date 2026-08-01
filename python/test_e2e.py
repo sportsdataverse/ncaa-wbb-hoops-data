@@ -1,4 +1,4 @@
-"""End-to-end offline build test -- all 9 datasets, one season, hermetic fixtures.
+"""End-to-end offline build test -- all 11 datasets, one season, hermetic fixtures.
 
 Builds every ``config.REGISTRY`` dataset from the 4 fixture games into a
 single ``tmp_path`` base and asserts, per dataset: the parquet was written,

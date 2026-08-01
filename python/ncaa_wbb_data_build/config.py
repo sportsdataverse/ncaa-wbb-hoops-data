@@ -56,6 +56,12 @@ REGISTRY: dict[str, DatasetSpec] = {
     "team_box": DatasetSpec("team_box", "team_box", _T + "team_box", "team_box"),
     "shots": DatasetSpec("shots", "shots", _T + "shots", "shots"),
     # DERIVED: no parsed-JSON family, built from other datasets.
+    "matchup_stints": DatasetSpec(
+        "matchup_stints", "matchup_stints", _T + "matchup_stints", None
+    ),
+    "team_rosters": DatasetSpec(
+        "team_rosters", "team_rosters", _T + "team_rosters", None
+    ),
     "schedule": DatasetSpec("schedule", "schedule", _T + "schedule", None),
     "rosters": DatasetSpec("rosters", "rosters", _T + "rosters", None),
     "team_ids": DatasetSpec("team_ids", "team_ids", _T + "team_ids", None),

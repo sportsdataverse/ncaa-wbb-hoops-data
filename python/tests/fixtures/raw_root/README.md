@@ -14,6 +14,18 @@ pattern).
   `sdv-py/tests/fixtures/ncaa/bigballr/html/{pbp,box,individual_stats}_{cid}.html`.
 - `wbb/schedule_master.parquet` — `contest_id` (Utf8), `season` (Utf8,
   `"2025"`), `captured` (Utf8); one row per game.
+- `wbb/team_rosters/2025/591724.json` — **shape fixture** for
+  `derived.team_rosters`, mirroring the raw repo's `ncaa_rosters.py` output
+  (`{team_id, team, season, league, captured_at, players[]}`). The team id
+  (`591724`, Coppin St.) is the real crosswalk id and the three players are
+  real names lifted from the `5722355` fixture's `player_box`, but the
+  roster-page-only fields (`player_id`, `jersey`, `class`, `position`,
+  `height`, `hometown`, `high_school`, `gp`, `gs`) are **null**: no WBB
+  roster page has been captured yet (`ncaa-wbb-hoops-raw` has no
+  `wbb/team_rosters/` tree), and inventing `player_id` values would plant
+  fake stats.ncaa.org ids in a fixture. Replace this file with a real
+  capture once the roster stage has run — and only then assert on
+  `player_id`.
 
 ## Games (all real season 2024-25)
 

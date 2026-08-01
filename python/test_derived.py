@@ -1,16 +1,23 @@
-"""Tests for derived.py -- the 3 non-family datasets, hermetic (real fixtures, no network)."""
+"""Tests for derived.py -- the 5 non-family datasets, hermetic (real fixtures, no network)."""
 
 import json
 from pathlib import Path
 
 import polars as pl
 
-from ncaa_wbb_data_build.derived import rosters, schedule, team_ids
+from ncaa_wbb_data_build.derived import (
+    _key_name,
+    lineup_key,
+    matchup_stints,
+    rosters,
+    schedule,
+    team_ids,
+    team_rosters,
+)
 from ncaa_wbb_data_build.reshapers import extract_family
 
-FIXTURES_DIR = (
-    Path(__file__).parent / "tests" / "fixtures" / "raw_root" / "wbb" / "json"
-)
+RAW_ROOT = Path(__file__).parent / "tests" / "fixtures" / "raw_root"
+FIXTURES_DIR = RAW_ROOT / "wbb" / "json"
 
 
 def _load_finals() -> list[dict]:
@@ -126,3 +133,85 @@ def test_schedule_and_rosters_skip_empty_family_without_raising():
 
     rost = rosters(finals, 2025)
     assert rost.height == rosters([real], 2025).height
+
+
+def test_key_name_is_immune_to_source_name_format():
+    """The whole point of _key_name: the box "Last, First" form and the pbp
+    "FIRST.LAST" form must hash to the same signature, through suffixes,
+    hyphens, apostrophes and diacritics."""
+    assert _key_name("Belinga, Arielle-Vadrelle") == _key_name(
+        "ARIELLEVADRELLE.BELINGA"
+    )
+    assert _key_name("Hall, Bree") == _key_name("BREE.HALL")
+    assert _key_name("Talton Jr, Derrick") == _key_name("DERRICK.TALTON")
+    assert _key_name("Je'Kel Smith") == _key_name("JEKEL.SMITH")
+    assert _key_name("Núñez, Ana") == _key_name("ANA.NUNEZ")
+    assert _key_name("Hall, Bree") != _key_name("BREE.HALLE")
+
+
+def test_lineup_key_is_team_scoped_and_order_free():
+    five = ["Hall, Bree", "Edwards, Joyce", "Dauda, Maryam", "Feagin, Sania", "X, Y"]
+    k = lineup_key("South Carolina", five)
+
+    assert k is not None and len(k) == 16
+    assert lineup_key("South Carolina", list(reversed(five))) == k
+    assert lineup_key(" south   carolina ", five) == k  # whitespace/case folded
+    assert lineup_key("Coppin St.", five) != k  # team-scoped
+    assert lineup_key("South Carolina", []) is None
+    assert lineup_key(None, five) is None
+
+
+def test_matchup_stints_partition_scores_exactly():
+    """Every game's segment points must sum to that game's final score --
+    the invariant that proves the segments partition the pbp with no
+    double-counted or dropped scoring event."""
+    finals = _load_finals()
+    df = matchup_stints(finals, 2025)
+
+    assert df.height > 0
+    assert df.schema["contest_id"] == pl.Utf8
+    assert (df.get_column("season") == 2025).all()
+    assert df.get_column("home_lineup_key").null_count() == 0
+    assert df.get_column("away_lineup_key").null_count() == 0
+    for c in ("home_1", "home_5", "away_1", "away_5", "matchup_key", "n_events"):
+        assert c in df.columns
+
+    sched = schedule(finals, 2025)
+    totals = df.group_by("contest_id").agg(
+        pl.col("home_pts").sum(), pl.col("away_pts").sum()
+    )
+    joined = totals.join(sched, on="contest_id", how="inner", suffix="_final")
+    assert joined.height == totals.height
+    assert (joined.get_column("home_pts") == joined.get_column("home_score")).all()
+    assert (joined.get_column("away_pts") == joined.get_column("away_score")).all()
+
+
+def test_matchup_stints_skips_a_bad_game_without_aborting():
+    finals = _load_finals()
+    bad = {"contest_id": "ZZZ", "pbp": [{"period": 1}]}  # no on-court columns
+
+    df = matchup_stints([*finals, bad], 2025)
+
+    assert df.height == matchup_stints(finals, 2025).height
+    assert "ZZZ" not in df.get_column("contest_id").to_list()
+
+
+def test_team_rosters_reads_the_raw_checkout_tree():
+    df = team_rosters(2025, RAW_ROOT)
+
+    assert df.height > 0
+    assert df.schema["team_id"] == pl.Utf8  # id discipline: Utf8 everywhere
+    assert df.schema["player_id"] == pl.Utf8
+    assert df.schema["season"] == pl.Int64
+    assert (df.get_column("season") == 2025).all()
+    assert df.get_column("team_id").to_list() == ["591724"] * df.height
+    # `player` is the FIRST.LAST key that byte-matches pbp name normalization
+    assert "ANGEL.JONES" in df.get_column("player").to_list()
+
+
+def test_team_rosters_absent_tree_returns_the_typed_empty_frame():
+    populated = team_rosters(2025, RAW_ROOT)
+    empty = team_rosters(1999, RAW_ROOT)
+
+    assert empty.height == 0
+    assert empty.schema == populated.schema

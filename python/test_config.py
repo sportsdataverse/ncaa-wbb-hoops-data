@@ -3,12 +3,12 @@
 from ncaa_wbb_data_build.config import REGISTRY
 
 DIRECT = {"pbp", "lineups", "possessions", "player_box", "team_box", "shots"}
-DERIVED = {"schedule", "rosters", "team_ids"}
+DERIVED = {"matchup_stints", "team_rosters", "schedule", "rosters", "team_ids"}
 EXPECTED = DIRECT | DERIVED
 
 
-def test_registry_has_exactly_nine_expected_datasets():
-    assert len(REGISTRY) == 9
+def test_registry_has_exactly_eleven_expected_datasets():
+    assert len(REGISTRY) == 11
     assert set(REGISTRY) == EXPECTED
 
 
