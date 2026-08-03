@@ -1,0 +1,49 @@
+name: tests
+
+# Offline build-package suite. These repos had NO CI at all (2026-08-02 pipeline
+# audit): the WBB builders were verified only when a human remembered to run
+# `uv run pytest python/ -q` locally.
+#
+# Sparse-checkout on purpose: the repo carries a built `wbb/` data tree that the
+# tests never read (fixtures live in python/tests/fixtures/), so pulling it would
+# cost minutes per run for nothing.
+
+on:
+  push:
+    branches: [main]
+    paths: ['python/**', 'pyproject.toml', 'uv.lock', '.github/workflows/tests.yml']
+  pull_request:
+    paths: ['python/**', 'pyproject.toml', 'uv.lock', '.github/workflows/tests.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            python
+            pyproject.toml
+            uv.lock
+          sparse-checkout-cone-mode: false
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+          cache-dependency-glob: uv.lock
+
+      # --frozen: the lockfile is the contract. sdv-py is a git source pinned in
+      # uv.lock, so a green run here proves the build package works against the
+      # sdv-py revision this repo actually claims -- not whatever a developer
+      # happens to have checked out next door.
+      - name: Sync deps
+        run: uv sync --frozen
+
+      - name: Run the build-package suite
+        run: uv run --no-sync pytest python/ -q

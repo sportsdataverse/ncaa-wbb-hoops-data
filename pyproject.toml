@@ -22,7 +22,12 @@ dev = ["pytest>=8"]
 # derived datasets resolve `sportsdataverse` to the local sibling checkout
 # (editable). Swap to the PyPI pin once a release ships NCAA support.
 [tool.uv.sources]
-sportsdataverse = { path = "../../sdv-py", editable = true }
+# Git source, not a local path: a `../../sdv-py` pin makes the repo buildable
+# only on a machine with this exact sibling layout (it fails on CI and for any
+# other contributor). Matches the convention in the stats-raw repos. For local
+# sdv-py work, override with:
+#   uv pip install -e ../../sdv-py
+sportsdataverse = { git = "https://github.com/sportsdataverse/sportsdataverse-py", branch = "main" }
 
 [build-system]
 requires = ["setuptools>=68"]
