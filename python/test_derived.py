@@ -63,14 +63,16 @@ def test_team_ids_season_is_int64_and_joins_direct_dataset():
     assert joined.height > 0
 
 
-def test_team_ids_2026_season_is_empty():
-    """Pins the known ceiling: the bundled WBB crosswalk has no 2025-26 row
-    yet, so season 2026 returns 0 rows. This is expected behavior, not a
-    lurking bug -- if the crosswalk is ever refreshed to cover 2025-26, this
-    assertion should be revisited rather than silently going stale."""
+def test_team_ids_2026_season_is_populated():
+    """The former ceiling, now lifted: the bundled WBB crosswalk gained its
+    2025-26 rows, so season 2026 resolves like every other season. (The old
+    assertion pinned `height == 0` and asked to be revisited rather than go
+    stale when the crosswalk was refreshed -- this is that revisit.)"""
     df = team_ids(2026)
 
-    assert df.height == 0
+    assert df.height > 0
+    assert df.get_column("season").unique().to_list() == [2026]
+    assert df.get_column("id").null_count() == 0
 
 
 def test_schedule_one_row_per_fixture_game():
