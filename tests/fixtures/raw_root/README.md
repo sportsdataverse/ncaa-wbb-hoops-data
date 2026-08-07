@@ -12,7 +12,7 @@ pattern).
   `ncaa_parse.parse_bundle(bundle, league="wbb")` over the committed
   bigballR HTML fixtures at
   `sdv-py/tests/fixtures/ncaa/bigballr/html/{pbp,box,individual_stats}_{cid}.html`.
-- `wbb/schedule_master.parquet` — `contest_id` (Utf8), `season` (Utf8,
+- `wbb/wbb_schedule_master.parquet` — `contest_id` (Utf8), `season` (Utf8,
   `"2025"`), `captured` (Utf8); one row per game.
 - `wbb/team_rosters/2025/591724.json` — **shape fixture** for
   `derived.team_rosters`, mirroring the raw repo's `ncaa_rosters.py` output
@@ -84,7 +84,7 @@ The generator builds the same bundle shape as the raw repo's
 `season="2024-25"`, `captured_at`, `urls={}`, `pages={play_by_play,
 box_score, individual_stats}`), calls `parse_bundle(bundle, league="wbb")`
 per game, writes each result to `wbb/json/{contest_id}.json`, and writes
-`wbb/schedule_master.parquet` with `season="2025"` (Utf8, ending-year label,
+`wbb/wbb_schedule_master.parquet` with `season="2025"` (Utf8, ending-year label,
 NOT the bundle's `"2024-25"` string) for all 4 rows. The generator is a
 one-off script, not part of this package — it is not committed here; see
 the Task 2 report (`sdv-py/.superpowers/sdd/ncaa-wbb-data/task-2-report.md`)

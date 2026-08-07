@@ -85,7 +85,7 @@ This repo consumes the output of the Phase-1 raw scraper,
 
 - `wbb/json/{contest_id}.json` -- per-game parsed payload (the 7-key dict
   `contest_id`/`pbp`/`lineups`/`player_box`/`team_box`/`shots`/`possessions`).
-- `wbb/schedule_master.parquet` -- the season contest-id index (`contest_id`,
+- `wbb/wbb_schedule_master.parquet` -- the season contest-id index (`contest_id`,
   `season` as Utf8 ending-year, `captured`).
 
 `contest_id` is a NCAA string id (not an ESPN int) and stays `Utf8`
@@ -139,7 +139,7 @@ that checkout happens to have captured.
 ## Tests
 
 Hermetic, offline, no network: 4 real fixture games under
-`tests/fixtures/raw_root/wbb/json/` plus a `schedule_master.parquet`
+`tests/fixtures/raw_root/wbb/json/` plus a `wbb_schedule_master.parquet`
 for season `2025`. `team_ids` reads the bundled sdv-py crosswalk, so it's
 offline too.
 
