@@ -21,7 +21,7 @@ import polars as pl
 from ncaa_wbb_data_build.build import build_season
 from ncaa_wbb_data_build.config import REGISTRY
 
-RAW_ROOT = Path(__file__).parent / "tests" / "fixtures" / "raw_root"
+RAW_ROOT = Path(__file__).parent / "fixtures" / "raw_root"
 SEASON = 2025
 
 # The 6 DIRECT datasets + schedule all carry contest_id (Utf8, dtype discipline).

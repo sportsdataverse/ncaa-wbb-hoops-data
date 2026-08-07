@@ -36,7 +36,7 @@ ending-year `Int64` throughout this package, so 2024-25 is season `2025`.
 
 Building `team_ids` for season 2026 (2025-26) therefore returns **0 rows**,
 silently -- not an error, not a warning that blocks the build. That's why
-`python/test_e2e.py` is pinned to season **2025**, not 2026: a season slip to
+`tests/test_e2e.py` is pinned to season **2025**, not 2026: a season slip to
 2026 would let an empty `team_ids` dataset sail through a "green" e2e
 undetected. `test_derived.py` locks both sides of this: `team_ids(2025)` is
 non-empty, `team_ids(2026)` is `height == 0`.
@@ -95,7 +95,7 @@ everywhere in this package -- never cast to `Int64`.
 `stats.ncaa.org` has not been run (it's a user-run job from a
 residential IP -- see `ncaa-wbb-hoops-raw`'s README). This builder currently
 has only the 4-game hermetic fixture bundled under
-`python/tests/fixtures/raw_root/wbb/` (season 2025). Running `run_build.sh`
+`tests/fixtures/raw_root/wbb/` (season 2025). Running `run_build.sh`
 against a real `NCAA_WBB_RAW_ROOT` today will only produce whatever games
 that checkout happens to have captured.
 
@@ -139,15 +139,15 @@ that checkout happens to have captured.
 ## Tests
 
 Hermetic, offline, no network: 4 real fixture games under
-`python/tests/fixtures/raw_root/wbb/json/` plus a `schedule_master.parquet`
+`tests/fixtures/raw_root/wbb/json/` plus a `schedule_master.parquet`
 for season `2025`. `team_ids` reads the bundled sdv-py crosswalk, so it's
 offline too.
 
 ```bash
-uv run pytest python/ -q
+uv run pytest -q
 ```
 
-`python/test_e2e.py` builds all 9 datasets from the fixtures into a temp
+`tests/test_e2e.py` builds all 9 datasets from the fixtures into a temp
 directory and asserts each parquet is written, non-empty, schema-stable
 across the write/read round-trip, and holds the dtype-discipline contract
 (`contest_id`/`id` as Utf8, `season` as Int64 == 2025). Season is pinned to

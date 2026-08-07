@@ -8,7 +8,7 @@ import polars as pl
 from ncaa_wbb_data_build import reshapers
 from ncaa_wbb_data_build.build import build_season
 
-RAW_ROOT = Path(__file__).parent / "tests" / "fixtures" / "raw_root"
+RAW_ROOT = Path(__file__).parent / "fixtures" / "raw_root"
 JSON_DIR = RAW_ROOT / "wbb" / "json"
 
 

@@ -3,7 +3,7 @@
 Mirrors the `ncaa-wbb-hoops-raw` on-disk tree so `ingest.read_parsed` /
 `ingest.season_contest_ids` and later build/e2e tests run fully offline.
 Clone of the `ncaa-mbb-hoops-data` template's fixture, retargeted to WBB (see
-that repo's `python/tests/fixtures/raw_root/README.md` for the shared
+that repo's `tests/fixtures/raw_root/README.md` for the shared
 pattern).
 
 - `wbb/json/{contest_id}.json` — the 7-key parsed dict

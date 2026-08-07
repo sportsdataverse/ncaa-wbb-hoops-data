@@ -9,7 +9,6 @@ from ncaa_wbb_data_build.reshapers import extract_family
 
 FIXTURE = (
     Path(__file__).parent
-    / "tests"
     / "fixtures"
     / "raw_root"
     / "wbb"

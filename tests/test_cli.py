@@ -8,7 +8,7 @@ import pytest
 from ncaa_wbb_data_build.cli import main
 from ncaa_wbb_data_build.config import REGISTRY
 
-RAW_ROOT = str(Path(__file__).parent / "tests" / "fixtures" / "raw_root")
+RAW_ROOT = str(Path(__file__).parent / "fixtures" / "raw_root")
 
 
 def test_build_help_exits_zero():

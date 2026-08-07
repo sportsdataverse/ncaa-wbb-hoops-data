@@ -18,6 +18,9 @@ ncaa-wbb-data-build = "ncaa_wbb_data_build.cli:main"
 [dependency-groups]
 dev = ["pytest>=8"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 # sdv-py's NCAA parsers (ncaa_wbb_team_ids, etc.) are not yet on PyPI, so the
 # derived datasets resolve `sportsdataverse` to the local sibling checkout
 # (editable). Swap to the PyPI pin once a release ships NCAA support.

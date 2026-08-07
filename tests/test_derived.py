@@ -16,7 +16,7 @@ from ncaa_wbb_data_build.derived import (
 )
 from ncaa_wbb_data_build.reshapers import extract_family
 
-RAW_ROOT = Path(__file__).parent / "tests" / "fixtures" / "raw_root"
+RAW_ROOT = Path(__file__).parent / "fixtures" / "raw_root"
 FIXTURES_DIR = RAW_ROOT / "wbb" / "json"
 
 
