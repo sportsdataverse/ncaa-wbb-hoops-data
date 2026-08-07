@@ -26,26 +26,24 @@ datasets rather than a parsed-JSON family.
 | `rosters` | derived | `ncaa_wbb_rosters` | Distinct `(team, player)` pairs per season, with a games-played count. Built from `player_box` because the parsed-JSON tree has no dedicated roster family -- sdv-py's roster parser needs separately-captured roster HTML this tree doesn't hold. |
 | `team_ids` | derived | `ncaa_wbb_team_ids` | stats.ncaa.org team-id crosswalk for the season, from the bundled sdv-py `ncaa_wbb_team_ids` table. |
 
-## The season ceiling: 2025
+## Season coverage (the 2025 ceiling is lifted)
 
 The bundled WBB team-id crosswalk
 (`sportsdataverse/wbb/data/ncaa_teamids_wbb.csv`, read via
-`sportsdataverse.wbb.wbb_ncaa_team_ids.ncaa_wbb_team_ids()`) covers seasons
-**2009-10 through 2024-25 only** -- there is no 2025-26 row yet. Season is an
-ending-year `Int64` throughout this package, so 2024-25 is season `2025`.
+`sportsdataverse.wbb.wbb_ncaa_team_ids.ncaa_wbb_team_ids()`) now covers
+**2009-10 through 2025-26**. Season is an ending-year `Int64` throughout this
+package, so 2024-25 is season `2025` and 2025-26 is season `2026`.
 
-Building `team_ids` for season 2026 (2025-26) therefore returns **0 rows**,
-silently -- not an error, not a warning that blocks the build. That's why
-`tests/test_e2e.py` is pinned to season **2025**, not 2026: a season slip to
-2026 would let an empty `team_ids` dataset sail through a "green" e2e
-undetected. `test_derived.py` locks both sides of this: `team_ids(2025)` is
-non-empty, `team_ids(2026)` is `height == 0`.
+`team_ids(2026)` therefore resolves like every other season.
+`test_derived.py::test_team_ids_2026_season_is_populated` locks that in --
+`height > 0`, `season` uniquely `[2026]`, no null `id`s. It replaces an
+earlier assertion that pinned `team_ids(2026).height == 0` back when the
+crosswalk stopped at 2024-25; the WBB ceiling no longer trails MBB's.
 
-This is a **WBB-specific** constraint -- the MBB crosswalk this repo was
-retargeted from already carries a 2025-26 row, so `ncaa-mbb-hoops-data`'s
-season ceiling is one year ahead. Extending the WBB crosswalk to add a
-2025-26 row is a separate sdv-py change, out of scope for this repo; once
-that lands, the ceiling here lifts to match.
+`tests/test_e2e.py` stays pinned to season **2025**, but for a fixture reason
+rather than a crosswalk one: the committed hermetic fixtures under
+`tests/fixtures/raw_root/wbb/` are season-2025 games. The pin tracks the
+fixtures, not a coverage gap.
 
 ## Run order
 
@@ -151,7 +149,8 @@ uv run pytest -q
 directory and asserts each parquet is written, non-empty, schema-stable
 across the write/read round-trip, and holds the dtype-discipline contract
 (`contest_id`/`id` as Utf8, `season` as Int64 == 2025). Season is pinned to
-2025, not 2026 -- see "The season ceiling" above.
+2025 because the committed fixtures are season-2025 games -- see "Season
+coverage" above.
 
 ## sdv-py loader wiring (deferred)
 
