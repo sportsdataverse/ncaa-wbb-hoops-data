@@ -6,10 +6,11 @@ is non-empty, and the returned frame's schema round-trips through disk
 unchanged. Also locks the dtype-discipline contract (``contest_id``/``id``
 Utf8, ``season`` Int64 == 2025) and that a build upserts the manifest.
 
-Season is pinned to **2025** (not 2026): the bundled WBB team-id crosswalk
-only covers 2009-10..2024-25, so ``team_ids(2026)`` returns 0 rows (see
-``derived.team_ids`` + ``test_derived.py``). Building at 2026 here would let
-an empty ``team_ids`` dataset sail through a "green" e2e undetected.
+Season is pinned to **2025** because the committed hermetic fixtures under
+``tests/fixtures/raw_root/wbb/`` are season-2025 games. This is no longer a
+crosswalk-coverage guard: the bundled WBB team-id crosswalk now carries
+2025-26, so ``team_ids(2026)`` resolves (see ``derived.team_ids`` +
+``test_derived.py::test_team_ids_2026_season_is_populated``).
 """
 
 from __future__ import annotations
