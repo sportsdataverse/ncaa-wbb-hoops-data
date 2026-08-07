@@ -16,10 +16,18 @@ dependencies = [
 ncaa-wbb-data-build = "ncaa_wbb_data_build.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.5"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+# E712: polars bool masks are written `pl.col("c") == True` on purpose.
+ignore = ["E712"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ncaa_wbb_data_build"]
 
 # sdv-py's NCAA parsers (ncaa_wbb_team_ids, etc.) are not yet on PyPI, so the
 # derived datasets resolve `sportsdataverse` to the local sibling checkout

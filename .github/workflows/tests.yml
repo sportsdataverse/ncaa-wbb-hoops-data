@@ -46,5 +46,8 @@ jobs:
       - name: Sync deps
         run: uv sync --frozen
 
+      - name: Lint
+        run: uv run --no-sync ruff check python tests
+
       - name: Run the build-package suite
         run: uv run --no-sync pytest -q
