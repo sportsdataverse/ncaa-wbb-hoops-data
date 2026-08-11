@@ -40,6 +40,37 @@ The numbered `ncaa_wbb_NN_*_creation.py` shims are **dataset identity**, not
 strict execution order. `tests/test_stage_inventory.py` gates the set.
 `config.REGISTRY` is the dataset registry.
 
+Stage order (= `config.REGISTRY` insertion order, which `--dataset all`
+iterates, so it is also the order a full build runs in):
+
+| NN | dataset | kind |
+| --- | --- | --- |
+| 01 | team_ids | derived (crosswalk only — reads no games) |
+| 02 | schedule | derived |
+| 03 | team_rosters | derived (raw roster files) |
+| 04 | rosters | derived |
+| 05 | pbp | direct |
+| 06 | player_box | direct |
+| 07 | team_box | direct |
+| 08 | lineups | direct |
+| 09 | matchup_stints | derived |
+| 10 | possessions | direct |
+| 11 | shots | direct |
+
+That sequence is a **reading order** — identity/reference first, then per-game
+events and box, then the lineup-grain frames — **not a dependency chain.** No
+dataset is built from another dataset's output: every one is a pure function of
+`(raw tree, season)`, so `--dataset shots` alone works. `matchup_stints` looks
+like the exception and isn't: its `*_lineup_key` columns join to `lineups` when
+you QUERY, but both are derived independently from the raw payloads when you
+BUILD. `tests/test_stage_inventory.py` gates the shim set AND that the numbers
+ascend with registry order — renumbering one without the other fails it.
+
+`config.REGISTRY` is the dataset registry: 6 datasets are **direct** extracts
+of a top-level key in each game's parsed JSON, the other 5 are **derived** from
+the parsed payloads, the raw roster files, or the crosswalk. `README.md` has
+the authoritative per-dataset table.
+
 ## The schedule-master name fallback (do not "clean up")
 
 `ingest.py` resolves the season contest-id index by trying, in order:
