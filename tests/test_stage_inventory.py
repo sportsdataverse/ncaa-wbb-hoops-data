@@ -11,11 +11,16 @@ stops being the pipeline -- a dataset gets built with no visible stage, or a
 stage file advertises a dataset the package cannot build and fails only when
 someone runs it.
 
-Stage numbers follow registry order, which is the intended BUILD order (the
-DERIVED datasets, built from other datasets rather than extracted directly
-from parsed-JSON, sort after the DIRECT per-game extracts they can depend
-on). They are not the execution schedule: ``--dataset all`` builds every
-dataset in one CLI invocation and stays the sequence truth. Holes are
+Stage numbers follow registry order, which reads the way you would rebuild a
+season from scratch: identity/reference frames first (team_ids, schedule,
+rosters), then the per-game event and box extracts, then the lineup-grain
+frames that index into them. Because ``cli.build`` iterates ``list(REGISTRY)``
+for ``--dataset all``, that order is also the order a full build actually
+runs in -- which is why this file gates the two against each other.
+
+It is a READING order, not a dependency chain: no dataset is built from
+another dataset's output (every one is a pure function of the raw tree and a
+season), so any single dataset can be built alone in any order. Holes are
 allowed and never compacted -- a retired dataset leaves its number behind
 rather than renumbering the rest.
 

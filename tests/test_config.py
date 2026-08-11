@@ -33,3 +33,24 @@ def test_tag_and_stem_derive_from_dataset_key():
     for dataset, spec in REGISTRY.items():
         assert spec.tag == "ncaa_wbb_" + dataset
         assert spec.stem == dataset
+
+
+def test_raw_sources_point_at_this_league_never_the_twin():
+    """The raw root must name THIS repo's league on both path segments.
+
+    Regression: a twin-port that rewrote only the ``ncaa_<lg>_`` tokens left
+    ``RAW_HTTP_BASE`` ending in the OTHER league's tree
+    (``.../ncaa-wbb-hoops-raw/main/mbb``), which would have fed MBB games to
+    the WBB producer through the HTTP fallback. Nothing caught it: the tag
+    check above only inspects tags, and the offline suite never exercises the
+    fallback. Assert the whole string, not a prefix.
+    """
+    from ncaa_wbb_data_build import config
+
+    league = "wbb"
+    assert config.RAW_HTTP_BASE.endswith(f"/{league}"), (
+        f"RAW_HTTP_BASE must end with the {league!r} tree, got {config.RAW_HTTP_BASE!r}"
+    )
+    assert f"ncaa-{league}-hoops-raw" in config.RAW_HTTP_BASE
+    assert f"ncaa-{'mbb' if league == 'wbb' else 'wbb'}-hoops-raw" not in config.RAW_HTTP_BASE
+    assert config.RAW_ROOT_ENV == f"NCAA_{league.upper()}_RAW_ROOT"

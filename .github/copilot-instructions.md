@@ -25,9 +25,12 @@ tree is currently empty.
   ingest, derived, reshapers, io, publish, rds). `config.REGISTRY` is the
   dataset registry — nine datasets: six direct extracts of a parsed-JSON key,
   three derived from other datasets. See `README.md` for the table.
-- `python/ncaa_wbb_NN_*_creation.py` are numbered stage shims. The numbers are
-  **dataset identity, not execution order**; `tests/test_stage_inventory.py`
-  gates the set.
+- `python/ncaa_wbb_NN_*_creation.py` are numbered stage shims (01..11).
+  The order is reference/identity -> per-game events+box -> lineup-grain, and
+  it matches `config.REGISTRY` insertion order, which `--dataset all`
+  iterates — so the numbers describe a real full-build sequence. It is a
+  reading order, not a dependency chain: no dataset reads another dataset's
+  output. `tests/test_stage_inventory.py` gates the set AND the ordering.
 
 ## ⚠️ The schedule-master name fallback
 

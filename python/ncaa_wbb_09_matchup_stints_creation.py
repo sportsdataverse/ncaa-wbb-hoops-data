@@ -1,15 +1,16 @@
-"""Stage 07 -- matchup_stints.
+"""Stage 09 -- matchup_stints.
 
 Thin shim over the tested build package: the pipeline logic lives in
 ``ncaa_wbb_data_build.build``; this file exists so the stage sequence is readable from a
 directory listing.
 
-Stage numbers follow the ``REGISTRY`` order in ``ncaa_wbb_data_build/config.py``, which is
-the intended build order -- the DERIVED datasets (built from other datasets,
-not extracted directly from parsed-JSON) sort after the DIRECT per-game
-extracts they can depend on. The number is a stable dataset identity, NOT an
-execution schedule: ``--dataset all`` builds every dataset in one CLI
-invocation and remains the sequence truth.
+Stage numbers follow the ``REGISTRY`` order in ``ncaa_wbb_data_build/config.py``, which
+reads the way you would rebuild a season from scratch: identity/reference
+frames first, then the per-game event and box extracts, then the lineup-grain
+frames that index into them. That is a READING order, not a dependency chain
+-- no dataset is built from another dataset's output, so any one of them can
+be built on its own. ``--dataset all`` builds every dataset in one CLI
+invocation, following this same sequence.
 
 Equivalent to::
 
@@ -27,5 +28,5 @@ DATASET = "matchup_stints"
 if __name__ == "__main__":
     # DATASET is appended, not prepended: argparse keeps the LAST occurrence of
     # an option, so a stray --dataset on the command line cannot make stage
-    # 07 build something other than matchup_stints.
+    # 09 build something other than matchup_stints.
     sys.exit(main([*sys.argv[1:], "--dataset", DATASET]))
