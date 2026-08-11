@@ -211,7 +211,7 @@ _TEAM_ROSTERS_SCHEMA: "dict[str, type]" = {
 def team_rosters(season: int, raw_root: "str | Path") -> pl.DataFrame:
     """Season rosters WITH stats.ncaa.org player ids, from the raw checkout.
 
-    Reads the per-team JSONs the raw repo's ``ncaa_rosters.py`` stage captures
+    Reads the per-team JSONs the raw repo's ``ncaa_wbb_04_rosters_scrape.py`` stage captures
     from each team's ``teams/{id}/roster`` page (one row per player; the
     ``player_id`` comes from the row's ``/players/{id}`` link, and ``player``
     is the FIRST.LAST key that byte-matches pbp name normalization -- the id
