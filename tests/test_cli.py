@@ -32,7 +32,7 @@ def test_build_dataset_shots(tmp_path: Path):
         ]
     )
     assert rc == 0
-    pq = tmp_path / "wbb" / "shots" / "parquet" / "shots_2025.parquet"
+    pq = tmp_path / "wbb" / "shots" / "parquet" / "ncaa_wbb_shots_2025.parquet"
     assert pq.exists()
     assert pl.read_parquet(pq).height > 0
 
@@ -53,5 +53,5 @@ def test_build_dataset_all(tmp_path: Path):
     )
     assert rc == 0
     for dataset in REGISTRY:
-        pq = tmp_path / "wbb" / dataset / "parquet" / f"{dataset}_2025.parquet"
+        pq = tmp_path / "wbb" / dataset / "parquet" / f"{REGISTRY[dataset].stem}_2025.parquet"
         assert pq.exists(), f"missing parquet for {dataset}"
