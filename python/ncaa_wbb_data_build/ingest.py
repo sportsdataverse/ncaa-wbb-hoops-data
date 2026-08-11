@@ -3,7 +3,7 @@
 The Python producer prefers the sibling checkout on disk (sdv-build-data
 convention); when unavailable, ``raw_root`` may instead be the
 ``raw.githubusercontent.com`` base URL (``config.RAW_HTTP_BASE``). Parsed
-game payloads -- the 7-key dict the raw repo's ``ncaa_parse.write_parsed``
+game payloads -- the 7-key dict the raw repo's ``ncaa_wbb_03_games_parse.write_parsed``
 produces (``contest_id``, ``pbp``, ``lineups``, ``player_box``, ``team_box``,
 ``shots``, ``possessions``) -- live at ``{raw_root}/wbb/json/{contest_id}.json``;
 the season contest-id index at ``{raw_root}/wbb/wbb_schedule_master.parquet``.
