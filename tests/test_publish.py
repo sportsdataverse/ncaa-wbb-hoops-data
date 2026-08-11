@@ -17,12 +17,12 @@ _SPEC = REGISTRY["pbp"]
 def _stage(tmp_path: Path) -> None:
     pq_dir = tmp_path / "wbb" / "pbp" / "parquet"
     pq_dir.mkdir(parents=True)
-    (pq_dir / "pbp_2025.parquet").write_bytes(b"parquet-bytes")
+    (pq_dir / "ncaa_wbb_pbp_2025.parquet").write_bytes(b"parquet-bytes")
 
     rel_dir = tmp_path / "wbb" / "_release_build" / "pbp"
     rel_dir.mkdir(parents=True)
-    (rel_dir / "pbp_2025.csv").write_bytes(b"csv-bytes")
-    (rel_dir / "pbp_2025.rds").write_bytes(b"rds-bytes")
+    (rel_dir / "ncaa_wbb_pbp_2025.csv").write_bytes(b"csv-bytes")
+    (rel_dir / "ncaa_wbb_pbp_2025.rds").write_bytes(b"rds-bytes")
 
 
 def test_publish_creates_release_when_absent(tmp_path: Path):
@@ -96,7 +96,7 @@ def test_publish_dry_run_makes_no_calls(tmp_path: Path):
 def test_publish_only_parquet_staged_uploads_one_file(tmp_path: Path):
     pq_dir = tmp_path / "wbb" / "pbp" / "parquet"
     pq_dir.mkdir(parents=True)
-    (pq_dir / "pbp_2025.parquet").write_bytes(b"parquet-bytes")
+    (pq_dir / "ncaa_wbb_pbp_2025.parquet").write_bytes(b"parquet-bytes")
     calls: list[list[str]] = []
 
     result = publish_dataset(
@@ -117,7 +117,7 @@ def test_publish_only_parquet_staged_uploads_one_file(tmp_path: Path):
 def _stage_parquet_only(tmp_path: Path) -> None:
     pq_dir = tmp_path / "wbb" / "pbp" / "parquet"
     pq_dir.mkdir(parents=True)
-    (pq_dir / "pbp_2025.parquet").write_bytes(b"parquet-bytes")
+    (pq_dir / "ncaa_wbb_pbp_2025.parquet").write_bytes(b"parquet-bytes")
 
 
 def test_publish_make_rds_stages_and_uploads_rds(tmp_path: Path, monkeypatch):
@@ -143,7 +143,7 @@ def test_publish_make_rds_stages_and_uploads_rds(tmp_path: Path, monkeypatch):
         make_rds=True,
     )
 
-    rds_path = tmp_path / "wbb" / "_release_build" / "pbp" / "pbp_2025.rds"
+    rds_path = tmp_path / "wbb" / "_release_build" / "pbp" / "ncaa_wbb_pbp_2025.rds"
     assert rds_path.exists()
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
     assert len(calls) == 2

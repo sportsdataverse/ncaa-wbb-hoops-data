@@ -32,7 +32,7 @@ def test_derived_datasets_have_no_family():
 def test_tag_and_stem_derive_from_dataset_key():
     for dataset, spec in REGISTRY.items():
         assert spec.tag == "ncaa_wbb_" + dataset
-        assert spec.stem == dataset
+        assert spec.stem == "ncaa_wbb_" + dataset
 
 
 def test_raw_sources_point_at_this_league_never_the_twin():

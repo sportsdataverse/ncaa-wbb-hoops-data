@@ -67,25 +67,22 @@ class DatasetSpec:
 # frames are derived independently from the raw payloads when you BUILD them.
 REGISTRY: dict[str, DatasetSpec] = {
     # -- reference / identity (DERIVED: no parsed-JSON family) ---------------
-    "team_ids": DatasetSpec("team_ids", "team_ids", _T + "team_ids", None),
-    "schedule": DatasetSpec("schedule", "schedule", _T + "schedule", None),
-    "team_rosters": DatasetSpec(
-        "team_rosters", "team_rosters", _T + "team_rosters", None
+    "team_ids": DatasetSpec("team_ids", _T + "team_ids", _T + "team_ids", None),
+    "schedule": DatasetSpec("schedule", _T + "schedule", _T + "schedule", None),
+    "team_rosters": DatasetSpec("team_rosters", _T + "team_rosters", _T + "team_rosters", None
     ),
-    "rosters": DatasetSpec("rosters", "rosters", _T + "rosters", None),
+    "rosters": DatasetSpec("rosters", _T + "rosters", _T + "rosters", None),
     # -- per-game events + box (DIRECT: family == dataset key) --------------
-    "pbp": DatasetSpec("pbp", "pbp", _T + "pbp", "pbp"),
-    "player_box": DatasetSpec(
-        "player_box", "player_box", _T + "player_box", "player_box"
+    "pbp": DatasetSpec("pbp", _T + "pbp", _T + "pbp", "pbp"),
+    "player_box": DatasetSpec("player_box", _T + "player_box", _T + "player_box", "player_box"
     ),
-    "team_box": DatasetSpec("team_box", "team_box", _T + "team_box", "team_box"),
+    "team_box": DatasetSpec("team_box", _T + "team_box", _T + "team_box", "team_box"),
     # -- lineup grain + the frames that index into the events ---------------
-    "lineups": DatasetSpec("lineups", "lineups", _T + "lineups", "lineups"),
+    "lineups": DatasetSpec("lineups", _T + "lineups", _T + "lineups", "lineups"),
     "matchup_stints": DatasetSpec(  # DERIVED
-        "matchup_stints", "matchup_stints", _T + "matchup_stints", None
+        "matchup_stints", _T + "matchup_stints", _T + "matchup_stints", None
     ),
-    "possessions": DatasetSpec(
-        "possessions", "possessions", _T + "possessions", "possessions"
+    "possessions": DatasetSpec("possessions", _T + "possessions", _T + "possessions", "possessions"
     ),
-    "shots": DatasetSpec("shots", "shots", _T + "shots", "shots"),
+    "shots": DatasetSpec("shots", _T + "shots", _T + "shots", "shots"),
 }
