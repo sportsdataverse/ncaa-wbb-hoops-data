@@ -101,12 +101,13 @@ def read_parsed(contest_id: str, *, raw_root: str | Path | None = None) -> dict 
     return payload
 
 
-def season_contest_ids(season: int, *, raw_root: str | Path | None = None) -> list[str]:
-    """Sorted, de-duplicated contest ids for ``season`` from ``wbb_schedule_master.parquet``.
+def schedule_master(*, raw_root: str | Path | None = None) -> pl.DataFrame | None:
+    """The raw repo's whole-history contest index, or ``None`` if absent.
 
-    ``season`` in the schedule is Utf8 (``str(ending_year)``, e.g. the
-    2024-25 season is stored as ``"2025"``). Returns ``[]`` if the parquet
-    is absent or the season matched nothing.
+    This is the DENOMINATOR of the D34 schedule master: every contest
+    stats.ncaa.org lists for a season, whether or not this repo built
+    anything from it. Columns are the raw repo's own
+    (``contest_id`` Utf8, ``season`` Utf8, ``captured`` Boolean).
 
     The prefixed ``wbb/wbb_schedule_master.parquet`` (D33/D36 master naming)
     is canonical; the legacy unprefixed ``wbb/schedule_master.parquet`` is
@@ -114,21 +115,29 @@ def season_contest_ids(season: int, *, raw_root: str | Path | None = None) -> li
     """
     root = _resolve_root(raw_root)
     names = ("wbb_schedule_master.parquet", "schedule_master.parquet")
-    df = None
     if isinstance(root, Path):
         for name in names:
             f = root / "wbb" / name
             if f.exists():
-                df = pl.read_parquet(f)
-                break
-    else:
-        # Same fix as read_parsed: use the resolved root, not the hardcoded
-        # default, so an explicit raw_root= URL is honored.
-        for name in names:
-            body = _http_get_bytes(f"{root}/{name}")
-            if body is not None:
-                df = pl.read_parquet(io.BytesIO(body))
-                break
+                return pl.read_parquet(f)
+        return None
+    # Same fix as read_parsed: use the resolved root, not the hardcoded
+    # default, so an explicit raw_root= URL is honored.
+    for name in names:
+        body = _http_get_bytes(f"{root}/{name}")
+        if body is not None:
+            return pl.read_parquet(io.BytesIO(body))
+    return None
+
+
+def season_contest_ids(season: int, *, raw_root: str | Path | None = None) -> list[str]:
+    """Sorted, de-duplicated contest ids for ``season`` from ``wbb_schedule_master.parquet``.
+
+    ``season`` in the schedule is Utf8 (``str(ending_year)``, e.g. the
+    2024-25 season is stored as ``"2025"``). Returns ``[]`` if the parquet
+    is absent or the season matched nothing.
+    """
+    df = schedule_master(raw_root=raw_root)
     if df is None:
         return []
     df = df.filter(pl.col("season") == str(season))

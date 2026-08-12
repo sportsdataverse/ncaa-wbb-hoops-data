@@ -29,11 +29,11 @@ to ingest until that lands.
 python/
   ncaa_wbb_data_build/          # the build package (installed by uv sync)
     cli.py  config.py  build.py  ingest.py  derived.py
-    reshapers.py  io.py  publish.py  rds.py  _logging.py  __main__.py
-  ncaa_wbb_NN_*_creation.py     # numbered stage shims
+    reshapers.py  io.py  publish.py  rds.py  master.py  _logging.py  __main__.py
+  ncaa_wbb_NN_*_creation.py     # numbered stage shims, 01..11 (+ 99)
 scripts/      # run_build.sh, run_publish.sh
 tests/        # suite + fixtures/ at repo ROOT
-wbb/          # the built dataset tree (currently empty)
+wbb/          # schedule master + coverage only -- no dataset tree built yet
 ```
 
 The numbered `ncaa_wbb_NN_*_creation.py` shims are **dataset identity**, not
@@ -56,6 +56,22 @@ iterates, so it is also the order a full build runs in):
 | 09 | matchup_stints | derived |
 | 10 | possessions | direct |
 | 11 | shots | direct |
+| 99 | *(schedule master)* | cross-dataset — RESERVED, not a registry entry |
+
+Stage 99 (`master.py` + `ncaa_wbb_99_schedule_master_creation.py`) is the D34
+coverage index: it runs LAST, reads what the other stages committed, and emits
+the master (denominator, from the RAW repo's D33 schedule master), the
+`games_in_data_repo` manifest (numerator), and a per-season coverage frame. Its
+`in_*` flag set is derived from `REGISTRY` (`level == "game"`) — adding a
+game-grain dataset gets a flag for free. `test_stage_inventory.py` skips 99
+because it has no registry entry by design.
+
+**WBB divergence from the MBB twin:** the raw capture campaign has not run, so
+`../ncaa-wbb-hoops-raw/wbb/json/` is empty, no dataset has been built, and
+every `in_*` is 0 over an 88,590-contest / 2011-2026 denominator. The master
+also has no game-detail columns (date/teams/score): those come from the built
+`schedule` dataset, which does not exist here yet. Re-run stage 99 after the
+capture lands and both gaps close on their own.
 
 That sequence is a **reading order** — identity/reference first, then per-game
 events and box, then the lineup-grain frames — **not a dependency chain.** No

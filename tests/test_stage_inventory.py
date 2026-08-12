@@ -40,6 +40,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 PACKAGE_SUFFIX = "_data_build"
 
+#: Stage number reserved for the D34 schedule master -- a cross-dataset stage,
+#: not a dataset shim, so it is exempt from the registry pairing below.
+RESERVED_MASTER_STAGE = "99"
+
 
 def _package_dir() -> Path:
     """The single ``python/<league>_data_build/`` package in this repo."""
@@ -97,6 +101,12 @@ def _shims() -> dict[str, tuple[str, Path]]:
         if not m:
             continue
         key, num = m.group("key"), m.group("num")
+        if num == RESERVED_MASTER_STAGE:
+            # Stage 99 is reserved for the schedule-master creation script
+            # (spec D34): it builds the master + manifest OVER every dataset,
+            # so it is deliberately not a per-dataset shim and has no
+            # registry entry.
+            continue
         if key in found:
             dupes.append(key)
         found[key] = (num, path)

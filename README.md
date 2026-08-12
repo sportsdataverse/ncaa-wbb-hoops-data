@@ -35,6 +35,7 @@ in any order (`--dataset shots` works on its own).
 | 09 | `matchup_stints` | derived | One row per constant-10-man floor segment, with score/possession deltas. `home_lineup_key`/`away_lineup_key` join to `lineups.lineup_key`. |
 | 10 | `possessions` | direct | Possession-level rollup. |
 | 11 | `shots` | direct | Shot events with location. |
+| 99 | *(schedule master)* | cross-dataset | Not a dataset — the D34 coverage index over all of the above. See below. |
 
 Two of the reference frames read a per-game **family** rather than a dedicated
 one: `schedule` from `pbp` and `rosters` from `player_box`. That is a content
@@ -42,12 +43,42 @@ lineage, not a build dependency — both re-derive from the raw payloads, so
 they are still buildable before stages 05/06 ever run. They sit early because
 they are dimension tables you join everything else to.
 
+## Schedule master (stage 99)
+
+Three committed artifacts answer "what does this repo actually have?", all
+emitted in one pass by `python/ncaa_wbb_99_schedule_master_creation.py`:
+
+| file | grain | what it is |
+| --- | --- | --- |
+| `wbb/ncaa_wbb_schedule_master.parquet` | one row per contest | **Denominator** — every contest stats.ncaa.org lists, including ones nothing was built from. |
+| `wbb/ncaa_wbb_games_in_data_repo.parquet` | one row per contest | **Numerator** — only contests present in ≥1 dataset. Join consumer work against this one. |
+| `wbb/ncaa_wbb_schedule_coverage.parquet` | one row per season | Game count, date span, and `pct_in_*` per dataset. |
+
+The denominator comes from the **raw** repo's `wbb/wbb_schedule_master.parquet`
+(D33), not from the built `schedule` dataset — that one is derived from `pbp`,
+so using it would make coverage 100% by construction. Each `in_*` flag is
+stamped from the committed per-season parquet of that dataset, and the flag SET
+is derived from `config.REGISTRY` (`level == "game"`), never hand-listed.
+
+**Current WBB state: the master is 88,590 contests over 2011-2026 and every
+`in_*` is 0.** The game-capture campaign for `ncaa-wbb-hoops-raw` has not run,
+so `wbb/json/` is empty and no per-season dataset has been built yet. That is
+reported as honest zeros over a real denominator rather than an empty file —
+when the capture lands, re-running stage 99 turns the same rows true.
+
+```bash
+NCAA_WBB_RAW_ROOT=../ncaa-wbb-hoops-raw \
+  uv run python python/ncaa_wbb_99_schedule_master_creation.py
+```
+
 ## Run order
 
 1. **Build** -- reshapes the raw JSON and writes parquet in-repo under
    `wbb/{dataset}/parquet/ncaa_wbb_{dataset}_{season}.parquet` (committed).
 2. **Publish** -- uploads parquet + csv.gz + rds as release assets to
    `sportsdataverse/sportsdataverse-data` (not committed; requires `gh` auth).
+3. **Stage 99** -- after the seasons are built, rebuild the schedule master so
+   the coverage index matches the tree.
 
 ```bash
 # Build all 11 datasets for a season
