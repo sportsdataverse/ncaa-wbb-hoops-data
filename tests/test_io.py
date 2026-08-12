@@ -1,11 +1,12 @@
 """Tests for io.py -- parquet writer (in-repo) + csv release staging + manifest."""
 
+import gzip
 from pathlib import Path
 
 import polars as pl
 
 from ncaa_wbb_data_build.config import REGISTRY
-from ncaa_wbb_data_build.io import write_dataset
+from ncaa_wbb_data_build.io import CSV_SUFFIX, write_dataset
 
 SPEC = REGISTRY["pbp"]
 
@@ -18,50 +19,56 @@ def _frame(n: int) -> pl.DataFrame:
 
 def test_release_false_writes_only_parquet_no_csv_anywhere(tmp_path: Path):
     df = _frame(5)
-    paths = write_dataset(df, SPEC, 2025, base=tmp_path)
+    paths = write_dataset(df, SPEC, 2026, base=tmp_path)
 
-    pq = tmp_path / "wbb" / "pbp" / "parquet" / "ncaa_wbb_pbp_2025.parquet"
+    pq = tmp_path / "wbb" / "pbp" / "parquet" / "ncaa_wbb_pbp_2026.parquet"
     assert paths == [pq]
     assert pq.exists()
     assert pl.read_parquet(pq).equals(df)
 
     release_dir = tmp_path / "wbb" / "_release_build"
-    assert not release_dir.exists() or not any(release_dir.rglob("*.csv"))
+    assert not release_dir.exists() or not any(release_dir.rglob("*.csv.gz"))
 
 
 def test_release_true_writes_parquet_and_staged_csv(tmp_path: Path):
     df = _frame(5)
-    paths = write_dataset(df, SPEC, 2025, base=tmp_path, release=True)
+    paths = write_dataset(df, SPEC, 2026, base=tmp_path, release=True)
 
     assert len(paths) == 2
-    csv = tmp_path / "wbb" / "_release_build" / "pbp" / "ncaa_wbb_pbp_2025.csv"
+    csv = tmp_path / "wbb" / "_release_build" / "pbp" / f"ncaa_wbb_pbp_2026{CSV_SUFFIX}"
     assert csv in paths
     assert csv.exists()
-    read_back = pl.read_csv(csv)
+    # Gzipped, and still a readable csv once decompressed -- the asset a
+    # consumer downloads must survive the round trip, not merely exist.
+    assert csv.read_bytes()[:2] == bytes.fromhex("1f8b"), (
+        "release csv is not gzip-compressed"
+    )
+    with gzip.open(csv, "rb") as fh:
+        read_back = pl.read_csv(fh)
     assert read_back.height == df.height
     assert read_back.width == df.width
 
 
 def test_manifest_upserts_by_dataset_and_season(tmp_path: Path):
     df = _frame(5)
-    write_dataset(df, SPEC, 2025, base=tmp_path)
+    write_dataset(df, SPEC, 2026, base=tmp_path)
 
     mf = tmp_path / "wbb" / "pbp" / "manifest.csv"
     assert mf.exists()
     rows = pl.read_csv(mf)
-    pbp_2025 = rows.filter((pl.col("dataset") == "pbp") & (pl.col("season") == 2025))
-    assert pbp_2025.height == 1
-    assert pbp_2025["row_count"][0] == 5
+    pbp_2026 = rows.filter((pl.col("dataset") == "pbp") & (pl.col("season") == 2026))
+    assert pbp_2026.height == 1
+    assert pbp_2026["row_count"][0] == 5
 
     # Re-write same (dataset, season) with a different height -> upsert, not append-dup.
     df2 = _frame(9)
-    write_dataset(df2, SPEC, 2025, base=tmp_path)
+    write_dataset(df2, SPEC, 2026, base=tmp_path)
     rows = pl.read_csv(mf)
-    pbp_2025 = rows.filter((pl.col("dataset") == "pbp") & (pl.col("season") == 2025))
-    assert pbp_2025.height == 1
-    assert pbp_2025["row_count"][0] == 9
+    pbp_2026 = rows.filter((pl.col("dataset") == "pbp") & (pl.col("season") == 2026))
+    assert pbp_2026.height == 1
+    assert pbp_2026["row_count"][0] == 9
 
     # A second season adds a second row.
-    write_dataset(_frame(3), SPEC, 2024, base=tmp_path)
+    write_dataset(_frame(3), SPEC, 2025, base=tmp_path)
     rows = pl.read_csv(mf)
     assert rows.height == 2

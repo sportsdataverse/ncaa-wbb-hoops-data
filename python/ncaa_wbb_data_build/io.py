@@ -1,15 +1,20 @@
-"""Dataset IO -- parquet writer (committed) + csv release staging + manifest.
+"""Dataset IO -- parquet writer (committed) + csv.gz release staging + manifest.
 
 Format policy: the tree commits **parquet only**, under
-``wbb/{dataset}/parquet/{stem}_{season}.parquet``. Release assets (csv here;
-``.rds`` in a later task) are staged under the gitignored
+``wbb/{dataset}/parquet/{stem}_{season}.parquet``. Release assets (csv.gz here,
+``.rds`` via ``rds.py``) are staged under the gitignored
 ``wbb/_release_build/`` and only produced when ``release=True`` -- they are
 never committed. A tiny per-dataset ``manifest.csv`` (committed) tracks one
 row per ``(dataset, season)``, upserted on every write.
+
+The release csv is **gzipped** -- see ``write_dataset`` for why (a plain pbp
+season csv is 99% of GitHub's 2 GiB per-asset limit). The committed manifest is
+an ordinary small csv and is NOT gzipped.
 """
 
 from __future__ import annotations
 
+import gzip
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,6 +24,10 @@ from ncaa_wbb_data_build._logging import get_logger, human_size
 from ncaa_wbb_data_build.config import DatasetSpec
 
 _LEAGUE = "wbb"
+
+#: Extension for the staged release csv. Gzipped: see ``write_dataset``.
+#: ``publish.py`` builds its upload list from this, so the two cannot drift.
+CSV_SUFFIX = ".csv.gz"
 
 log = get_logger()
 
@@ -77,13 +86,20 @@ def write_dataset(
     base: str | Path = ".",
     release: bool = False,
 ) -> list[Path]:
-    """Write the committed parquet (always) + staged release csv (if requested).
+    """Write the committed parquet (always) + staged release csv.gz (if requested).
 
     Always writes ``{base}/wbb/{dataset}/parquet/{stem}_{season}.parquet``.
-    When ``release=True`` also writes a plain csv to the gitignored
-    ``{base}/wbb/_release_build/{dataset}/{stem}_{season}.csv``. Upserts the
+    When ``release=True`` also writes a GZIPPED csv to the gitignored
+    ``{base}/wbb/_release_build/{dataset}/{stem}_{season}.csv.gz``. Upserts the
     committed ``{base}/wbb/{dataset}/manifest.csv`` row for every write.
-    Returns the parquet path, plus the csv path when ``release=True``.
+    Returns the parquet path, plus the csv.gz path when ``release=True``.
+
+    **Why gzip, not plain csv:** one season of ``pbp`` is ~3.1M rows and writes
+    a 2.03 GB plain csv -- 99% of GitHub's 2 GiB per-release-asset hard limit,
+    so a season a hair longer than 2025-26 would fail to upload at all. Gzip
+    takes it to ~200 MB and removes the cliff. `espn_cfb_model_pbp` already
+    ships `.csv.gz` on this same release repo, so the extension is not novel
+    for consumers.
     """
     base = Path(base)
     pq_dir = base / _LEAGUE / spec.dataset / "parquet"
@@ -95,8 +111,11 @@ def write_dataset(
     if release:
         csv_dir = base / _LEAGUE / "_release_build" / spec.dataset
         csv_dir.mkdir(parents=True, exist_ok=True)
-        csv = csv_dir / f"{spec.stem}_{season}.csv"
-        df.write_csv(csv)
+        csv = csv_dir / f"{spec.stem}_{season}{CSV_SUFFIX}"
+        # mtime=0 so re-running a build produces a byte-identical asset rather
+        # than one that differs only by embedded timestamp.
+        with gzip.GzipFile(csv, "wb", compresslevel=6, mtime=0) as fh:
+            df.write_csv(fh)
         out.append(csv)
 
     manifest = _upsert_manifest(spec, season, df.height, base)
