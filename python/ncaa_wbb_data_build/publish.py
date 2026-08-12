@@ -17,6 +17,7 @@ from typing import Callable
 
 from ncaa_wbb_data_build._logging import get_logger, human_size
 from ncaa_wbb_data_build.config import DatasetSpec
+from ncaa_wbb_data_build.io import CSV_SUFFIX  # single source of the csv extension
 
 _LEAGUE = "wbb"
 
@@ -47,27 +48,14 @@ def _gh_release_exists(tag: str, repo: str) -> bool:
     )
 
 
-def _dataset_paths(spec: DatasetSpec, season: int, base: Path) -> dict[str, Path]:
-    """The three release-asset paths for one dataset/season (parquet/csv/rds).
-
-    Single source of truth for path construction -- both ``_dataset_files``
-    and ``publish_dataset``'s rds-staging step need these, and a desync
-    between two independent constructions is a silent-miss risk.
-    """
-    release_dir = base / _LEAGUE / "_release_build" / spec.dataset
-    return {
-        "parquet": base
-        / _LEAGUE
-        / spec.dataset
-        / "parquet"
-        / f"{spec.stem}_{season}.parquet",
-        "csv": release_dir / f"{spec.stem}_{season}.csv",
-        "rds": release_dir / f"{spec.stem}_{season}.rds",
-    }
-
-
 def _dataset_files(spec: DatasetSpec, season: int, base: Path) -> list[Path]:
-    return [f for f in _dataset_paths(spec, season, base).values() if f.exists()]
+    release_dir = base / _LEAGUE / "_release_build" / spec.dataset
+    cands = [
+        base / _LEAGUE / spec.dataset / "parquet" / f"{spec.stem}_{season}.parquet",
+        release_dir / f"{spec.stem}_{season}{CSV_SUFFIX}",
+        release_dir / f"{spec.stem}_{season}.rds",
+    ]
+    return [f for f in cands if f.exists()]
 
 
 def publish_dataset(
@@ -103,16 +91,23 @@ def publish_dataset(
 
             from ncaa_wbb_data_build.config import REGISTRY
             from ncaa_wbb_data_build import publish
-            publish.publish_dataset(REGISTRY["team_box"], 2025, base="build")
+            publish.publish_dataset(REGISTRY["team_box"], 2026, base="build")
     """
     run = runner or _gh
     exists = exists_check or _gh_release_exists
     base = Path(base)
 
     if make_rds:
-        paths = _dataset_paths(spec, season, base)
-        parquet = paths["parquet"]
-        rds_path = paths["rds"]
+        parquet = (
+            base / _LEAGUE / spec.dataset / "parquet" / f"{spec.stem}_{season}.parquet"
+        )
+        rds_path = (
+            base
+            / _LEAGUE
+            / "_release_build"
+            / spec.dataset
+            / f"{spec.stem}_{season}.rds"
+        )
         # Regenerate the rds when it's missing OR stale (parquet rebuilt since):
         # a prior run's rds must never be uploaded against a freshly written parquet.
         if parquet.exists() and (

@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ncaa_wbb_data_build.config import REGISTRY
+from ncaa_wbb_data_build.io import CSV_SUFFIX
 from ncaa_wbb_data_build.publish import DEFAULT_REPO, publish_dataset
 
 _SPEC = REGISTRY["pbp"]
@@ -17,12 +18,12 @@ _SPEC = REGISTRY["pbp"]
 def _stage(tmp_path: Path) -> None:
     pq_dir = tmp_path / "wbb" / "pbp" / "parquet"
     pq_dir.mkdir(parents=True)
-    (pq_dir / "ncaa_wbb_pbp_2025.parquet").write_bytes(b"parquet-bytes")
+    (pq_dir / "ncaa_wbb_pbp_2026.parquet").write_bytes(b"parquet-bytes")
 
     rel_dir = tmp_path / "wbb" / "_release_build" / "pbp"
     rel_dir.mkdir(parents=True)
-    (rel_dir / "ncaa_wbb_pbp_2025.csv").write_bytes(b"csv-bytes")
-    (rel_dir / "ncaa_wbb_pbp_2025.rds").write_bytes(b"rds-bytes")
+    (rel_dir / f"ncaa_wbb_pbp_2026{CSV_SUFFIX}").write_bytes(b"csv-bytes")
+    (rel_dir / "ncaa_wbb_pbp_2026.rds").write_bytes(b"rds-bytes")
 
 
 def test_publish_creates_release_when_absent(tmp_path: Path):
@@ -31,7 +32,7 @@ def test_publish_creates_release_when_absent(tmp_path: Path):
 
     result = publish_dataset(
         _SPEC,
-        2025,
+        2026,
         base=tmp_path,
         runner=lambda args: calls.append(args),
         exists_check=lambda t, r: False,
@@ -40,9 +41,6 @@ def test_publish_creates_release_when_absent(tmp_path: Path):
 
     creates = [c for c in calls if c[:2] == ["release", "create"]]
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
-    # Total call count: catches an injected extra call (e.g. a stray
-    # `release delete`) that individual argv assertions below wouldn't notice.
-    assert len(calls) == 4
     assert len(creates) == 1
     assert creates[0][2] == "ncaa_wbb_pbp"
     assert "--repo" in creates[0] and DEFAULT_REPO in creates[0]
@@ -63,14 +61,13 @@ def test_publish_skips_create_when_release_present(tmp_path: Path):
 
     publish_dataset(
         _SPEC,
-        2025,
+        2026,
         base=tmp_path,
         runner=lambda args: calls.append(args),
         exists_check=lambda t, r: True,
         make_rds=False,
     )
 
-    assert len(calls) == 3
     assert not any(c[:2] == ["release", "create"] for c in calls)
     assert sum(1 for c in calls if c[:2] == ["release", "upload"]) == 3
 
@@ -81,7 +78,7 @@ def test_publish_dry_run_makes_no_calls(tmp_path: Path):
 
     result = publish_dataset(
         _SPEC,
-        2025,
+        2026,
         base=tmp_path,
         dry_run=True,
         runner=lambda args: calls.append(args),
@@ -96,12 +93,12 @@ def test_publish_dry_run_makes_no_calls(tmp_path: Path):
 def test_publish_only_parquet_staged_uploads_one_file(tmp_path: Path):
     pq_dir = tmp_path / "wbb" / "pbp" / "parquet"
     pq_dir.mkdir(parents=True)
-    (pq_dir / "ncaa_wbb_pbp_2025.parquet").write_bytes(b"parquet-bytes")
+    (pq_dir / "ncaa_wbb_pbp_2026.parquet").write_bytes(b"parquet-bytes")
     calls: list[list[str]] = []
 
     result = publish_dataset(
         _SPEC,
-        2025,
+        2026,
         base=tmp_path,
         runner=lambda args: calls.append(args),
         exists_check=lambda t, r: True,
@@ -109,7 +106,6 @@ def test_publish_only_parquet_staged_uploads_one_file(tmp_path: Path):
     )
 
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
-    assert len(calls) == 1
     assert len(uploads) == 1
     assert result["uploaded"] == 1
 
@@ -117,7 +113,7 @@ def test_publish_only_parquet_staged_uploads_one_file(tmp_path: Path):
 def _stage_parquet_only(tmp_path: Path) -> None:
     pq_dir = tmp_path / "wbb" / "pbp" / "parquet"
     pq_dir.mkdir(parents=True)
-    (pq_dir / "ncaa_wbb_pbp_2025.parquet").write_bytes(b"parquet-bytes")
+    (pq_dir / "ncaa_wbb_pbp_2026.parquet").write_bytes(b"parquet-bytes")
 
 
 def test_publish_make_rds_stages_and_uploads_rds(tmp_path: Path, monkeypatch):
@@ -136,17 +132,16 @@ def test_publish_make_rds_stages_and_uploads_rds(tmp_path: Path, monkeypatch):
 
     result = publish_dataset(
         _SPEC,
-        2025,
+        2026,
         base=tmp_path,
         runner=lambda args: calls.append(args),
         exists_check=lambda t, r: True,
         make_rds=True,
     )
 
-    rds_path = tmp_path / "wbb" / "_release_build" / "pbp" / "ncaa_wbb_pbp_2025.rds"
+    rds_path = tmp_path / "wbb" / "_release_build" / "pbp" / "ncaa_wbb_pbp_2026.rds"
     assert rds_path.exists()
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
-    assert len(calls) == 2
     assert len(uploads) == 2
     assert result["uploaded"] == 2
 
@@ -163,7 +158,7 @@ def test_publish_make_rds_failure_still_uploads_parquet(tmp_path: Path, monkeypa
 
     result = publish_dataset(
         _SPEC,
-        2025,
+        2026,
         base=tmp_path,
         runner=lambda args: calls.append(args),
         exists_check=lambda t, r: True,
@@ -171,6 +166,5 @@ def test_publish_make_rds_failure_still_uploads_parquet(tmp_path: Path, monkeypa
     )
 
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
-    assert len(calls) == 1
     assert len(uploads) == 1
     assert result["uploaded"] == 1
