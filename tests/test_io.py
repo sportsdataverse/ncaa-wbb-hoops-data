@@ -27,7 +27,10 @@ def test_release_false_writes_only_parquet_no_csv_anywhere(tmp_path: Path):
     assert pl.read_parquet(pq).equals(df)
 
     release_dir = tmp_path / "wbb" / "_release_build"
-    assert not release_dir.exists() or not any(release_dir.rglob("*.csv.gz"))
+    # Both suffixes: asserting only *.csv.gz would let a regression that writes
+    # a PLAIN csv when release=False pass unnoticed.
+    staged = list(release_dir.rglob("*.csv")) + list(release_dir.rglob("*.csv.gz"))
+    assert not release_dir.exists() or not staged
 
 
 def test_release_true_writes_parquet_and_staged_csv(tmp_path: Path):
