@@ -8,8 +8,8 @@ never committed. A tiny per-dataset ``manifest.csv`` (committed) tracks one
 row per ``(dataset, season)``, upserted on every write.
 
 The release csv is **gzipped** -- see ``write_dataset`` for why (a plain pbp
-season csv is 99% of GitHub's 2 GiB per-asset limit). The committed manifest is
-an ordinary small csv and is NOT gzipped.
+season csv measures 99.0% of GitHub's 2 GiB per-asset limit). The committed
+manifest is an ordinary small csv and is NOT gzipped.
 """
 
 from __future__ import annotations
@@ -95,9 +95,11 @@ def write_dataset(
     Returns the parquet path, plus the csv.gz path when ``release=True``.
 
     **Why gzip, not plain csv:** one season of ``pbp`` is ~3.1M rows and writes
-    a 2.03 GB plain csv -- 99% of GitHub's 2 GiB per-release-asset hard limit,
-    so a season a hair longer than 2025-26 would fail to upload at all. Gzip
-    takes it to ~200 MB and removes the cliff. `espn_cfb_model_pbp` already
+    a **2,126,337,961-byte** plain csv -- 99.0% of GitHub's 2 GiB
+    (2,147,483,648-byte) per-release-asset hard limit, so a season a hair longer
+    than 2025-26 would fail to upload at all. Gzipped it is **99,701,928 bytes**
+    (~95 MiB), 21.3x smaller, and the cliff is gone. Byte counts, not rounded
+    GB/MB, because the whole point is a hard limit measured in bytes. `espn_cfb_model_pbp` already
     ships `.csv.gz` on this same release repo, so the extension is not novel
     for consumers.
     """
