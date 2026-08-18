@@ -37,15 +37,42 @@ def _gh(args: list[str]) -> None:
 
 
 def _gh_release_exists(tag: str, repo: str) -> bool:
-    return (
-        subprocess.run(
+    """True when ``tag`` exists. Ambiguous failures are NOT reported as absent.
+
+    ``gh release view`` returns 0 when the release exists and 1 when it does
+    not. Any OTHER code means gh could not answer the question -- it failed to
+    launch, lost the network, hit an auth error. Reading that as "absent" makes
+    the caller try to CREATE a release that already exists, which fails and
+    takes the whole unit down with it.
+
+    That is exactly what happened on 2026-08-18 at 02:53:17: a transient
+    Windows STATUS_DLL_INIT_FAILED (0xC0000142 = exit 3221225794) hit Rscript
+    and gh in the same second, this check read it as "tag missing", and
+    ``team_ids 2022`` died on a redundant ``release create``.
+
+    So: 0 -> True, 1 -> False, anything else -> retry once, then assume the
+    release EXISTS. Assuming existence is the safe default -- if it really is
+    missing, the upload that follows fails loudly and the unit is retried,
+    whereas assuming absence corrupts a good run.
+    """
+    for attempt in (1, 2):
+        rc = subprocess.run(
             ["gh", "release", "view", tag, "--repo", repo],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=_GH_TIMEOUT,
         ).returncode
-        == 0
+        if rc in (0, 1):
+            return rc == 0
+        log.warning(
+            "gh release view %s: ambiguous exit %d (attempt %d/2)", tag, rc, attempt
+        )
+    log.warning(
+        "gh could not resolve whether %s exists -- assuming it does, so a real "
+        "upload error surfaces instead of a bogus 'release create'",
+        tag,
     )
+    return True
 
 
 def published_assets(tag: str, repo: str = DEFAULT_REPO) -> set[str]:
