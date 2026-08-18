@@ -30,12 +30,26 @@ def _check(args: argparse.Namespace) -> int:
     """Compare each dataset's LOCALLY BUILT seasons against what the release holds.
 
     Compares the SETS, never the counts -- a count-only check passes while the
-    seasons are wrong. Exits non-zero on any disagreement so a sweep can be
-    gated on it.
+    seasons are wrong.
+
+    Only ``built - live`` (built here, missing from the release) fails the
+    check: that is the question a publish sweep needs answered. The reverse,
+    ``live - built``, is REPORTED but not fatal, because a season published
+    from another machine or built-then-pruned locally is legitimate and is not
+    a publishing failure. Making it fatal would red the gate on a clean repo.
+
+    A ``GhUnavailable`` is deliberately NOT swallowed into "nothing published":
+    that is the distinction between "this tag has nothing" and "I could not
+    look", and collapsing it would make a resume index empty and re-upload an
+    entire history.
     """
     from pathlib import Path
 
-    from ncaa_wbb_data_build.publish import DEFAULT_REPO, published_seasons
+    from ncaa_wbb_data_build.publish import (
+        DEFAULT_REPO,
+        GhUnavailable,
+        published_seasons,
+    )
 
     datasets = list(REGISTRY) if args.dataset == "all" else [args.dataset]
     base = Path(args.base)
@@ -49,7 +63,14 @@ def _check(args: argparse.Namespace) -> int:
             )
             if p.stem.rsplit("_", 1)[1].isdigit()
         }
-        live = published_seasons(spec, repo=args.repo or DEFAULT_REPO)
+        try:
+            live = published_seasons(spec, repo=args.repo or DEFAULT_REPO)
+        except GhUnavailable as exc:
+            # Exit 2 (not 1): "I could not look" is a different outcome from
+            # "there are gaps", and a caller gating a sweep must be able to
+            # tell them apart before deciding to upload anything.
+            log.error("cannot audit %s: %s", name, exc)
+            return 2
         if args.porcelain:
             # "<dataset> <season>" per PUBLISHED unit -- the resume index a
             # sweep driver greps. One gh call per tag builds the whole index.

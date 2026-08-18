@@ -33,7 +33,7 @@
 set -uo pipefail          # NOT -e: one bad season must not kill the sweep
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
 
 START="${START:-2026}"          # newest season (ending year)
 END="${END:-2010}"              # oldest
@@ -103,14 +103,17 @@ if [ "$FORCE" = "1" ] || [ "$DRY_RUN" = "1" ]; then
   : > "$INDEX"        # force/dry-run: treat everything as unpublished
   say "resume: disabled (force=${FORCE} dry_run=${DRY_RUN}) -- every unit will run"
 else
-  if "$PY" -m ncaa_wbb_data_build check --porcelain > "$INDEX" 2>>"$LOG"; then
-    say "resume: $(wc -l < "$INDEX" | tr -d ' ') unit(s) already published -- they will be skipped"
-  else
-    # A failed index must NOT silently degrade into "nothing is published",
-    # which would re-upload the entire history.
-    say "resume: FAILED to read published state -- aborting (re-run when gh works)"
+  "$PY" -m ncaa_wbb_data_build check --porcelain > "$INDEX" 2>>"$LOG"
+  idx_rc=$?
+  # rc 2 = "gh could not answer" (GhUnavailable), distinct from rc 1 = "there
+  # are gaps". Only rc 2 is fatal here: gaps are exactly what this sweep fills,
+  # but an unreadable index must NOT degrade into "nothing is published" --
+  # that would re-upload the entire history while reporting a clean run.
+  if [ "$idx_rc" -eq 2 ]; then
+    say "resume: gh could not report published state -- aborting (re-run when gh works)"
     exit 1
   fi
+  say "resume: $(wc -l < "$INDEX" | tr -d ' ') unit(s) already published -- they will be skipped"
 fi
 
 ok=0; skip=0; fail=0; failed_list=""
@@ -151,4 +154,4 @@ fi
 # Exit RED if anything failed, but only AFTER every other unit had its turn --
 # one bad dataset-season must not hide the 180 that worked.
 echo "EXIT=$([ "$fail" -eq 0 ] && echo 0 || echo 1)" | tee -a "$LOG"
-exit $([ "$fail" -eq 0 ] && echo 0 || echo 1)
+exit "$([ "$fail" -eq 0 ] && echo 0 || echo 1)"

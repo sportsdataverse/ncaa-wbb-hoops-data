@@ -36,74 +36,108 @@ def _gh(args: list[str]) -> None:
     subprocess.run(["gh", *args], check=True, timeout=_GH_TIMEOUT)
 
 
-def _gh_release_exists(tag: str, repo: str) -> bool:
-    """True when ``tag`` exists. Ambiguous failures are NOT reported as absent.
+class GhUnavailable(RuntimeError):
+    """``gh`` could not answer -- callers must NOT infer release state from it.
 
-    ``gh release view`` returns 0 when the release exists and 1 when it does
-    not. Any OTHER code means gh could not answer the question -- it failed to
-    launch, lost the network, hit an auth error. Reading that as "absent" makes
-    the caller try to CREATE a release that already exists, which fails and
-    takes the whole unit down with it.
-
-    That is exactly what happened on 2026-08-18 at 02:53:17: a transient
-    Windows STATUS_DLL_INIT_FAILED (0xC0000142 = exit 3221225794) hit Rscript
-    and gh in the same second, this check read it as "tag missing", and
-    ``team_ids 2022`` died on a redundant ``release create``.
-
-    So: 0 -> True, 1 -> False, anything else -> retry once, then assume the
-    release EXISTS. Assuming existence is the safe default -- if it really is
-    missing, the upload that follows fails loudly and the unit is retried,
-    whereas assuming absence corrupts a good run.
+    The whole point of this type is that "I don't know" is not "it's empty".
+    Collapsing the two is what makes a resume gate silently re-upload a full
+    history.
     """
+
+
+# `gh release view` prints exactly this to stderr when the tag does not exist.
+# It is the ONLY confirmation of absence: a nonzero exit alone is not, because
+# gh also exits nonzero for auth failures, rate limits, and bad repos, and it
+# even reports a bad repo through a GraphQL error rather than a clean code.
+_NOT_FOUND = "release not found"
+
+
+def _gh_release_assets(tag: str, repo: str) -> set[str] | None:
+    """Asset names for ``tag``, or ``None`` when the release is CONFIRMED absent.
+
+    Raises:
+        GhUnavailable: gh could not answer -- ambiguous exit, launch failure, or
+            timeout, each retried once first.
+
+    Absence is proven by the ``release not found`` stderr line, never by an exit
+    code. On 2026-08-18 02:53:17 a transient Windows STATUS_DLL_INIT_FAILED
+    (0xC0000142 = exit 3221225794) hit Rscript and gh in the same second; a
+    code-only check read it as "tag missing" and killed ``team_ids 2022`` on a
+    redundant ``release create``.
+    """
+    last: str = "unknown"
     for attempt in (1, 2):
-        rc = subprocess.run(
-            ["gh", "release", "view", tag, "--repo", repo],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=_GH_TIMEOUT,
-        ).returncode
-        if rc in (0, 1):
-            return rc == 0
+        try:
+            proc = subprocess.run(
+                # fmt: off
+                [
+                    "gh",
+                    "release",
+                    "view",
+                    tag,
+                    "--repo",
+                    repo,
+                    "--json",
+                    "assets",
+                    "--jq",
+                    ".assets[].name",
+                ],
+                # fmt: on
+                capture_output=True,
+                text=True,
+                timeout=_GH_TIMEOUT,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            # gh failed to LAUNCH or hung -- never an exit code, so an
+            # rc-only check would not see these at all.
+            last = f"{type(exc).__name__}: {exc}"
+            log.warning("gh release view %s: %s (attempt %d/2)", tag, last, attempt)
+            continue
+        if proc.returncode == 0:
+            return {ln.strip() for ln in proc.stdout.splitlines() if ln.strip()}
+        err = (proc.stderr or "").strip()
+        if _NOT_FOUND in err.lower():
+            return None  # confirmed absent
+        last = f"exit {proc.returncode}: {err[:200]}"
+        log.warning("gh release view %s: %s (attempt %d/2)", tag, last, attempt)
+    raise GhUnavailable(f"cannot resolve release {tag} on {repo} -- {last}")
+
+
+def _gh_release_exists(tag: str, repo: str) -> bool:
+    """True when ``tag`` exists. An unanswerable gh is NOT reported as absent.
+
+    When gh cannot answer, assume the release EXISTS: if it really is missing,
+    the upload that follows fails loudly and the unit retries, whereas assuming
+    absence makes the caller ``release create`` over a live tag and takes an
+    otherwise-good unit down.
+    """
+    try:
+        return _gh_release_assets(tag, repo) is not None
+    except GhUnavailable as exc:
         log.warning(
-            "gh release view %s: ambiguous exit %d (attempt %d/2)", tag, rc, attempt
+            "%s -- assuming the release exists, so a real upload error surfaces "
+            "instead of a bogus 'release create'",
+            exc,
         )
-    log.warning(
-        "gh could not resolve whether %s exists -- assuming it does, so a real "
-        "upload error surfaces instead of a bogus 'release create'",
-        tag,
-    )
-    return True
+        return True
 
 
 def published_assets(tag: str, repo: str = DEFAULT_REPO) -> set[str]:
-    """Asset names currently attached to ``tag``; empty set when the tag is absent.
+    """Asset names attached to ``tag``; empty set only when it is CONFIRMED absent.
 
-    ONE ``gh`` call per TAG, not per (dataset, season). A sweep therefore costs
-    11 calls instead of 187: the 2026-08-12 MBB publish burned its GitHub API
-    quota on per-unit polling and earned a 403 partway through the sweep.
+    Raises:
+        GhUnavailable: gh could not answer. This MUST propagate -- it is the
+            difference between "this tag has nothing" and "I could not look".
+            Returning an empty set on failure would make ``check --porcelain``
+            emit an empty resume index and exit 0, so
+            ``run_historical_publish.sh`` would rebuild and re-upload the entire
+            history while reporting a clean run.
+
+    ONE ``gh`` call per TAG, not per (dataset, season): a sweep costs 11 calls
+    instead of 187, and the 2026-08-12 MBB publish burned its API quota on
+    per-unit polling and earned a 403 partway through.
     """
-    proc = subprocess.run(
-        # fmt: off
-        [
-            "gh",
-            "release",
-            "view",
-            tag,
-            "--repo",
-            repo,
-            "--json",
-            "assets",
-            "--jq",
-            ".assets[].name",
-        ],
-        # fmt: on
-        capture_output=True,
-        text=True,
-        timeout=_GH_TIMEOUT,
-    )
-    if proc.returncode != 0:  # tag not created yet -> nothing published
-        return set()
-    return {ln.strip() for ln in proc.stdout.splitlines() if ln.strip()}
+    return _gh_release_assets(tag, repo) or set()
 
 
 def published_seasons(
