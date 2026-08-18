@@ -249,3 +249,45 @@ def test_release_exists_assumes_present_when_gh_cannot_answer(monkeypatch):
         P.subprocess, "run", lambda *a, **k: _Proc(1, "", "release not found")
     )
     assert P._gh_release_exists("t", DEFAULT_REPO) is False
+
+
+# --- gh timeouts -------------------------------------------------------------
+#
+# Metadata calls and uploads are different workloads. A single pbp season ships
+# a ~50MB parquet, a ~68MB csv.gz and a ~59MB rds; on 2026-08-18 the shared
+# 180s bound aborted `pbp 2013` mid-upload and discarded 279s of build work
+# because the transfer was slow, not stuck. Widening the shared bound instead
+# would have made it useless as a hang detector for release view/create.
+
+
+def test_metadata_and_upload_timeouts_are_separate():
+    from ncaa_wbb_data_build import publish as P
+
+    assert P._GH_TIMEOUT == 180
+    assert P._GH_UPLOAD_TIMEOUT > P._GH_TIMEOUT
+    # Big enough for a ~68MB asset on a slow link.
+    assert P._GH_UPLOAD_TIMEOUT >= 900
+
+
+def test_uploads_use_the_long_timeout(tmp_path: Path, monkeypatch):
+    """The upload shell-out must not inherit the short metadata bound."""
+    from ncaa_wbb_data_build import publish as P
+
+    _stage(tmp_path)
+    seen: "list[int]" = []
+
+    def _fake_run(argv, **kw):
+        if "upload" in argv:
+            seen.append(kw.get("timeout"))
+
+        class _R:
+            returncode = 0
+
+        return _R()
+
+    monkeypatch.setattr(P.subprocess, "run", _fake_run)
+    P.publish_dataset(
+        _SPEC, 2026, base=tmp_path, exists_check=lambda *_: True, make_rds=False
+    )
+    assert seen, "no upload was attempted"
+    assert all(t == P._GH_UPLOAD_TIMEOUT for t in seen), seen
