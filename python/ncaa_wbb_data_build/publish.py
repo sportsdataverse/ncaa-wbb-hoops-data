@@ -48,6 +48,67 @@ def _gh_release_exists(tag: str, repo: str) -> bool:
     )
 
 
+def published_assets(tag: str, repo: str = DEFAULT_REPO) -> set[str]:
+    """Asset names currently attached to ``tag``; empty set when the tag is absent.
+
+    ONE ``gh`` call per TAG, not per (dataset, season). A sweep therefore costs
+    11 calls instead of 187: the 2026-08-12 MBB publish burned its GitHub API
+    quota on per-unit polling and earned a 403 partway through the sweep.
+    """
+    proc = subprocess.run(
+        # fmt: off
+        [
+            "gh",
+            "release",
+            "view",
+            tag,
+            "--repo",
+            repo,
+            "--json",
+            "assets",
+            "--jq",
+            ".assets[].name",
+        ],
+        # fmt: on
+        capture_output=True,
+        text=True,
+        timeout=_GH_TIMEOUT,
+    )
+    if proc.returncode != 0:  # tag not created yet -> nothing published
+        return set()
+    return {ln.strip() for ln in proc.stdout.splitlines() if ln.strip()}
+
+
+def published_seasons(
+    spec: DatasetSpec,
+    *,
+    repo: str = DEFAULT_REPO,
+    assets: set[str] | None = None,
+) -> set[int]:
+    """Seasons of ``spec`` whose REQUIRED assets are actually on the release.
+
+    Required = parquet AND csv; ``.rds`` is best-effort (``publish_dataset``
+    already degrades to a warning when no R install has arrow), so demanding it
+    would make every season look unpublished on a machine without R.
+
+    This exists because **a manifest row proves a BUILD, not a PUBLISH.**
+    ``io.write_dataset`` upserts the manifest before ``publish_dataset`` runs,
+    so a season whose upload failed still leaves a manifest row behind -- and a
+    resume check keyed on the manifest skips it forever, silently. Ask the
+    release what it actually has.
+    """
+    names = published_assets(spec.tag, repo) if assets is None else assets
+    out: set[int] = set()
+    prefix, suffix = f"{spec.stem}_", ".parquet"
+    for n in names:
+        if not (n.startswith(prefix) and n.endswith(suffix)):
+            continue
+        season = n[len(prefix) : -len(suffix)]
+        if season.isdigit() and f"{prefix}{season}{CSV_SUFFIX}" in names:
+            out.add(int(season))
+    return out
+
+
 def _dataset_files(spec: DatasetSpec, season: int, base: Path) -> list[Path]:
     release_dir = base / _LEAGUE / "_release_build" / spec.dataset
     cands = [
