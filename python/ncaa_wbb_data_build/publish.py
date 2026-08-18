@@ -12,6 +12,7 @@ gitignored, written by ``io.write_dataset(release=True)`` / ``rds.to_rds``).
 from __future__ import annotations
 
 import subprocess
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
@@ -29,11 +30,20 @@ log = get_logger()
 # Bound each `gh` shell-out so a network stall / hung invocation can't block the
 # whole publish run indefinitely (a failed upload is safe to re-run -- every
 # upload is idempotent via --clobber).
+#
+# Metadata calls (release view/create) answer in seconds, so a short bound is a
+# real hang detector for them. UPLOADS are a different workload: a single pbp
+# season ships a ~50MB parquet, a ~68MB csv.gz and a ~59MB rds, and on
+# 2026-08-18 the shared 180s bound aborted `pbp 2013` mid-upload -- 279s of
+# build work discarded because the transfer was merely slow, not stuck. One
+# timeout cannot serve both; sizing the shared bound for uploads would have
+# made it useless as a hang detector for the metadata calls.
 _GH_TIMEOUT = 180
+_GH_UPLOAD_TIMEOUT = 1800
 
 
-def _gh(args: list[str]) -> None:
-    subprocess.run(["gh", *args], check=True, timeout=_GH_TIMEOUT)
+def _gh(args: list[str], *, timeout: int = _GH_TIMEOUT) -> None:
+    subprocess.run(["gh", *args], check=True, timeout=timeout)
 
 
 class GhUnavailable(RuntimeError):
@@ -216,6 +226,13 @@ def publish_dataset(
             publish.publish_dataset(REGISTRY["team_box"], 2026, base="build")
     """
     run = runner or _gh
+    # Uploads move tens of MB and need a far longer bound than the metadata
+    # calls (see _GH_UPLOAD_TIMEOUT). Bind it here rather than widening `_gh`'s
+    # default, so release view/create keep a bound short enough to still detect
+    # a hang. An INJECTED runner is passed through untouched -- its signature is
+    # the documented `Callable[[list[str]], None]` and tests' fakes take no
+    # timeout kwarg.
+    upload = runner or partial(_gh, timeout=_GH_UPLOAD_TIMEOUT)
     exists = exists_check or _gh_release_exists
     base = Path(base)
 
@@ -275,7 +292,7 @@ def publish_dataset(
             continue
         size = human_size(f.stat().st_size)
         log.info("uploading %s (%s) -> %s:%s", f.name, size, repo, spec.tag)
-        run(["release", "upload", spec.tag, str(f), "--repo", repo, "--clobber"])
+        upload(["release", "upload", spec.tag, str(f), "--repo", repo, "--clobber"])
         count += 1
         log.info("uploaded %s -> %s (asset %d/%d)", f.name, spec.tag, count, len(files))
 
