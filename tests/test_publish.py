@@ -168,3 +168,84 @@ def test_publish_make_rds_failure_still_uploads_parquet(tmp_path: Path, monkeypa
     uploads = [c for c in calls if c[:2] == ["release", "upload"]]
     assert len(uploads) == 1
     assert result["uploaded"] == 1
+
+
+# --- release-state resolution ------------------------------------------------
+#
+# The distinction under test: "this tag has nothing" vs "I could not look".
+# Collapsing them makes `check --porcelain` emit an empty resume index and exit
+# 0, so run_historical_publish.sh re-uploads an entire history while reporting a
+# clean run. Absence must be proven by gh's `release not found`, never inferred
+# from an exit code -- gh also exits non-zero for auth, rate-limit, and bad-repo
+# errors, and on 2026-08-18 a Windows STATUS_DLL_INIT_FAILED (exit 3221225794)
+# was read as "tag missing" and killed a live unit on a redundant create.
+
+
+class _Proc:
+    def __init__(self, returncode: int, stdout: str = "", stderr: str = ""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def test_published_assets_parses_names(monkeypatch):
+    from ncaa_wbb_data_build import publish as P
+
+    monkeypatch.setattr(
+        P.subprocess, "run", lambda *a, **k: _Proc(0, "a.parquet\na.csv.gz\n")
+    )
+    assert P.published_assets("t") == {"a.parquet", "a.csv.gz"}
+
+
+def test_published_assets_empty_only_for_confirmed_missing(monkeypatch):
+    from ncaa_wbb_data_build import publish as P
+
+    monkeypatch.setattr(
+        P.subprocess, "run", lambda *a, **k: _Proc(1, "", "release not found")
+    )
+    assert P.published_assets("t") == set()
+
+
+def test_published_assets_raises_on_ambiguous_exit(monkeypatch):
+    """A DLL-init / auth / rate-limit failure must NOT look like an empty tag."""
+    import pytest
+
+    from ncaa_wbb_data_build import publish as P
+
+    monkeypatch.setattr(P.subprocess, "run", lambda *a, **k: _Proc(3221225794))
+    with pytest.raises(P.GhUnavailable):
+        P.published_assets("t")
+
+
+def test_published_assets_raises_on_launch_failure_and_timeout(monkeypatch):
+    """These arrive as EXCEPTIONS, not exit codes -- an rc-only check misses them."""
+    import pytest
+
+    from ncaa_wbb_data_build import publish as P
+
+    def _boom(*a, **k):
+        raise OSError("gh not found")
+
+    monkeypatch.setattr(P.subprocess, "run", _boom)
+    with pytest.raises(P.GhUnavailable):
+        P.published_assets("t")
+
+    def _hang(*a, **k):
+        raise P.subprocess.TimeoutExpired("gh", 1)
+
+    monkeypatch.setattr(P.subprocess, "run", _hang)
+    with pytest.raises(P.GhUnavailable):
+        P.published_assets("t")
+
+
+def test_release_exists_assumes_present_when_gh_cannot_answer(monkeypatch):
+    """Safe default: a bogus `release create` over a live tag fails the unit."""
+    from ncaa_wbb_data_build import publish as P
+
+    monkeypatch.setattr(P.subprocess, "run", lambda *a, **k: _Proc(3221225794))
+    assert P._gh_release_exists("t", DEFAULT_REPO) is True
+
+    monkeypatch.setattr(
+        P.subprocess, "run", lambda *a, **k: _Proc(1, "", "release not found")
+    )
+    assert P._gh_release_exists("t", DEFAULT_REPO) is False

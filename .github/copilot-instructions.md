@@ -14,17 +14,22 @@ sibling `ncaa-wbb-hoops-raw` checkout (or `NCAA_WBB_RAW_ROOT`) and never hits
 `stats.ncaa.org`. Wanting to fetch a page here means the work belongs in
 `-raw`. Never mix the two stages.
 
-Input state: the sibling raw repo has no `wbb/raw/` or `wbb/json/` tree yet
-(the pbp capture campaign still needs a run), and this repo's `wbb/` output
-tree is currently empty.
+Input state: the capture campaign is COMPLETE. The sibling raw repo holds
+93,884 captured bundles and 93,884 parsed `wbb/json/` payloads across seasons
+2010-2026 (99.83% of the 94,042-contest denominator; the 158 stragglers are
+pageless/cancelled contests with no game page). This repo builds and publishes
+all 17 seasons from that tree.
 
 ## Repository Workflow
 
 - Branch from `main`; `main` is the default branch.
 - The build package is `python/ncaa_wbb_data_build/` (cli, config, build,
   ingest, derived, reshapers, io, publish, rds). `config.REGISTRY` is the
-  dataset registry — nine datasets: six direct extracts of a parsed-JSON key,
-  three derived from other datasets. See `README.md` for the table.
+  dataset registry — eleven datasets: six direct extracts of a parsed-JSON key
+  (`family` set), five derived (`family` is None). No dataset is built from
+  another dataset's OUTPUT — every one is a pure function of (raw tree,
+  season), so any single dataset can be built on its own, in any order. See
+  `README.md` for the table.
 - `python/ncaa_wbb_NN_*_creation.py` are numbered stage shims (01..11).
   The order is reference/identity -> per-game events+box -> lineup-grain, and
   it matches `config.REGISTRY` insertion order, which `--dataset all`

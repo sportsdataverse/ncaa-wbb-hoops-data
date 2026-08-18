@@ -36,16 +36,138 @@ def _gh(args: list[str]) -> None:
     subprocess.run(["gh", *args], check=True, timeout=_GH_TIMEOUT)
 
 
+class GhUnavailable(RuntimeError):
+    """``gh`` could not answer -- callers must NOT infer release state from it.
+
+    The whole point of this type is that "I don't know" is not "it's empty".
+    Collapsing the two is what makes a resume gate silently re-upload a full
+    history.
+    """
+
+
+# `gh release view` prints exactly this to stderr when the tag does not exist.
+# It is the ONLY confirmation of absence: a nonzero exit alone is not, because
+# gh also exits nonzero for auth failures, rate limits, and bad repos, and it
+# even reports a bad repo through a GraphQL error rather than a clean code.
+_NOT_FOUND = "release not found"
+
+
+def _gh_release_assets(tag: str, repo: str) -> set[str] | None:
+    """Asset names for ``tag``, or ``None`` when the release is CONFIRMED absent.
+
+    Raises:
+        GhUnavailable: gh could not answer -- ambiguous exit, launch failure, or
+            timeout, each retried once first.
+
+    Absence is proven by the ``release not found`` stderr line, never by an exit
+    code. On 2026-08-18 02:53:17 a transient Windows STATUS_DLL_INIT_FAILED
+    (0xC0000142 = exit 3221225794) hit Rscript and gh in the same second; a
+    code-only check read it as "tag missing" and killed ``team_ids 2022`` on a
+    redundant ``release create``.
+    """
+    last: str = "unknown"
+    for attempt in (1, 2):
+        try:
+            proc = subprocess.run(
+                # fmt: off
+                [
+                    "gh",
+                    "release",
+                    "view",
+                    tag,
+                    "--repo",
+                    repo,
+                    "--json",
+                    "assets",
+                    "--jq",
+                    ".assets[].name",
+                ],
+                # fmt: on
+                capture_output=True,
+                text=True,
+                timeout=_GH_TIMEOUT,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            # gh failed to LAUNCH or hung -- never an exit code, so an
+            # rc-only check would not see these at all.
+            last = f"{type(exc).__name__}: {exc}"
+            log.warning("gh release view %s: %s (attempt %d/2)", tag, last, attempt)
+            continue
+        if proc.returncode == 0:
+            return {ln.strip() for ln in proc.stdout.splitlines() if ln.strip()}
+        err = (proc.stderr or "").strip()
+        if _NOT_FOUND in err.lower():
+            return None  # confirmed absent
+        last = f"exit {proc.returncode}: {err[:200]}"
+        log.warning("gh release view %s: %s (attempt %d/2)", tag, last, attempt)
+    raise GhUnavailable(f"cannot resolve release {tag} on {repo} -- {last}")
+
+
 def _gh_release_exists(tag: str, repo: str) -> bool:
-    return (
-        subprocess.run(
-            ["gh", "release", "view", tag, "--repo", repo],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=_GH_TIMEOUT,
-        ).returncode
-        == 0
-    )
+    """True when ``tag`` exists. An unanswerable gh is NOT reported as absent.
+
+    When gh cannot answer, assume the release EXISTS: if it really is missing,
+    the upload that follows fails loudly and the unit retries, whereas assuming
+    absence makes the caller ``release create`` over a live tag and takes an
+    otherwise-good unit down.
+    """
+    try:
+        return _gh_release_assets(tag, repo) is not None
+    except GhUnavailable as exc:
+        log.warning(
+            "%s -- assuming the release exists, so a real upload error surfaces "
+            "instead of a bogus 'release create'",
+            exc,
+        )
+        return True
+
+
+def published_assets(tag: str, repo: str = DEFAULT_REPO) -> set[str]:
+    """Asset names attached to ``tag``; empty set only when it is CONFIRMED absent.
+
+    Raises:
+        GhUnavailable: gh could not answer. This MUST propagate -- it is the
+            difference between "this tag has nothing" and "I could not look".
+            Returning an empty set on failure would make ``check --porcelain``
+            emit an empty resume index and exit 0, so
+            ``run_historical_publish.sh`` would rebuild and re-upload the entire
+            history while reporting a clean run.
+
+    ONE ``gh`` call per TAG, not per (dataset, season): a sweep costs 11 calls
+    instead of 187, and the 2026-08-12 MBB publish burned its API quota on
+    per-unit polling and earned a 403 partway through.
+    """
+    return _gh_release_assets(tag, repo) or set()
+
+
+def published_seasons(
+    spec: DatasetSpec,
+    *,
+    repo: str = DEFAULT_REPO,
+    assets: set[str] | None = None,
+) -> set[int]:
+    """Seasons of ``spec`` whose REQUIRED assets are actually on the release.
+
+    Required = parquet AND csv; ``.rds`` is best-effort (``publish_dataset``
+    already degrades to a warning when no R install has arrow), so demanding it
+    would make every season look unpublished on a machine without R.
+
+    This exists because **a manifest row proves a BUILD, not a PUBLISH.**
+    ``io.write_dataset`` upserts the manifest before ``publish_dataset`` runs,
+    so a season whose upload failed still leaves a manifest row behind -- and a
+    resume check keyed on the manifest skips it forever, silently. Ask the
+    release what it actually has.
+    """
+    names = published_assets(spec.tag, repo) if assets is None else assets
+    out: set[int] = set()
+    prefix, suffix = f"{spec.stem}_", ".parquet"
+    for n in names:
+        if not (n.startswith(prefix) and n.endswith(suffix)):
+            continue
+        season = n[len(prefix) : -len(suffix)]
+        if season.isdigit() and f"{prefix}{season}{CSV_SUFFIX}" in names:
+            out.add(int(season))
+    return out
 
 
 def _dataset_files(spec: DatasetSpec, season: int, base: Path) -> list[Path]:

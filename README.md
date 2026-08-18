@@ -100,6 +100,30 @@ SEASON=2025 DATASET=shots bash scripts/run_build.sh   # single dataset
 SEASON=2025 bash scripts/run_publish.sh                # build + publish
 ```
 
+For the **whole history** rather than one season, use the historical driver.
+It builds and publishes every season of every dataset, newest-first:
+
+```bash
+bash scripts/run_historical_publish.sh                 # 2010..2026, all datasets
+START=2015 END=2010 bash scripts/run_historical_publish.sh
+DATASETS="pbp shots" bash scripts/run_historical_publish.sh
+DRY_RUN=1 bash scripts/run_historical_publish.sh       # build + stage, no uploads
+```
+
+It is resumable, **and its resume proves a PUBLISH**: a (dataset, season) is
+skipped only when the release actually holds its parquet + csv, never on the
+strength of a local parquet or a manifest row (`io.write_dataset` upserts the
+manifest *before* the upload runs, so a failed upload otherwise looks done
+forever). The index costs one `gh` call per tag, and the sweep ends by
+re-auditing what actually landed:
+
+```bash
+python -m ncaa_wbb_data_build check              # built vs published, per dataset
+python -m ncaa_wbb_data_build check --porcelain  # "<dataset> <season>" per published unit
+```
+
+Watch a run live with `tail -f logs/historical_publish_<timestamp>.log`.
+
 `NCAA_WBB_RAW_ROOT` points at the sibling `ncaa-wbb-hoops-raw` checkout (the
 launchers default it to `../ncaa-wbb-hoops-raw`); an HTTP fallback is used
 when that checkout isn't available locally.
@@ -147,9 +171,11 @@ that checkout happens to have captured.
   smaller. `espn_cfb_model_pbp` already ships `.csv.gz` on the same release
   repo. Read one with `pl.read_csv(gzip.open(path, "rb"))`, or
   `readr::read_csv()` in R, which decompresses transparently.
-- **No `ncaa_wbb_*` release exists yet** on `sportsdataverse/sportsdataverse-data`.
-  `run_publish.sh` is retargeted and syntax-checked but has never been run for
-  real against this repo's datasets.
+- **The `ncaa_wbb_*` releases are live** on `sportsdataverse/sportsdataverse-data`
+  (11 tags, one per dataset), first published 2026-08-18 by
+  `scripts/run_historical_publish.sh` over the completed 2010-2026 capture.
+  Run `python -m ncaa_wbb_data_build check` for the current built-vs-published
+  state rather than trusting this line.
 - **rds** requires R with the `arrow` package (`Rscript` shells out to
   `arrow::read_parquet` -> `saveRDS`). Resolution order: `SDV_RSCRIPT` env,
   then `RSCRIPT` env, then `Rscript` on `PATH`, then a scan of
