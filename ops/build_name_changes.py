@@ -67,6 +67,9 @@ def raw_dir(league: str, raw_root: "str | None" = None) -> Path:
     return Path(__file__).resolve().parents[2] / repo / tree
 
 _OPT = re.compile(r'<option value="(\d+)"[^>]*>\s*([^<]+?)\s*</option>')
+#: Files that could not be parsed. A non-empty ledger fails the run.
+_FAILURES: "list[tuple[str, str]]" = []
+
 _SHOT = re.compile(r"addShot\([^)]*?:\s*(?:made|missed) by ([^(]+)\(([^)]+)\)[^)]*?player_(\d+)")
 
 
@@ -86,8 +89,13 @@ def scan_game(path: Path) -> "list[tuple[str, str, str]]":
         with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
             pages = json.load(fh).get("pages", {})
     except (OSError, json.JSONDecodeError, EOFError) as exc:
-        # Narrow + logged: a bare `except Exception` made corruption
-        # indistinguishable from "this game had no name changes".
+        # Narrow, logged, AND COUNTED. A bare `except Exception` made corruption
+        # indistinguishable from "this game had no name changes"; returning []
+        # quietly is just as bad, because the run then writes a
+        # successful-looking parquet over an incomplete scan. One bad file must
+        # not abort a 194k-file sweep, so the failure is recorded and the RUN
+        # exits non-zero at the end -- the driver-failure-ledger pattern.
+        _FAILURES.append((str(path), f"{type(exc).__name__}: {exc}"))
         print(f"  WARN unreadable {path.name}: {type(exc).__name__}: {exc}", flush=True)
         return []
     box = pages.get("box_score") or ""
@@ -126,7 +134,21 @@ def main(argv=None) -> int:
         print(f"ERROR: raw tree not found: {root}", file=sys.stderr)
         print(f"  pass --raw-root or set ${_ROOT_ENV[args.league]}", file=sys.stderr)
         return 2
-    seasons = [str(s) for s in args.season] if args.season else sorted(d.name for d in root.iterdir() if d.is_dir())
+    available = {d.name for d in root.iterdir() if d.is_dir()}
+    if args.season:
+        seasons = [str(s) for s in args.season]
+        missing = [s for s in seasons if s not in available]
+        if missing:
+            # Silently scanning nothing would emit an empty parquet that looks
+            # like "no name changes this season".
+            print(
+                f"ERROR: no raw tree for season(s) {', '.join(missing)} under {root}",
+                file=sys.stderr,
+            )
+            print(f"  available: {', '.join(sorted(available))}", file=sys.stderr)
+            return 2
+    else:
+        seasons = sorted(available)
     rows, scanned = [], 0
     for season in seasons:
         d = root / season
@@ -193,6 +215,14 @@ def main(argv=None) -> int:
     )
     df.write_parquet(out)
     print(f"scanned={scanned} games -> {df.height} name-changes -> {out}")
+    if _FAILURES:
+        print(file=sys.stderr)
+        print(f"FAILED to parse {len(_FAILURES)} file(s) -- crosswalk is INCOMPLETE:", file=sys.stderr)
+        for path_, why in _FAILURES[:20]:
+            print(f"  {path_}: {why}", file=sys.stderr)
+        if len(_FAILURES) > 20:
+            print(f"  ... and {len(_FAILURES) - 20} more", file=sys.stderr)
+        return 1
     return 0
 
 

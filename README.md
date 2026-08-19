@@ -234,7 +234,7 @@ who changes their name therefore never matches between `possessions` and
 
 The `box_score` page binds both renderings to one numeric player id:
 
-```
+```text
 shot JS   addShot(..., '... player_768547579 team_201', ...)
           "made by Miah Monahan(Eastern Ill.)"      <- game-time
 dropdown  <option value="768547579">Miah Meyer      <- current
