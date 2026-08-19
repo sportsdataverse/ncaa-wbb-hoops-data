@@ -16,13 +16,20 @@ The `box_score` page carries both, bound by a shared numeric player id:
 The id is per-game (sequential within a page), which is fine: we only need it
 to link the two renderings inside one page.
 
-Usage (from the worktree root):
+Canonical home is the `-data` repo, at `ops/build_name_changes.py`:
 
-    uv run python dev/ncaa_rapm/build_name_changes.py --league wbb
-    uv run python dev/ncaa_rapm/build_name_changes.py --league mbb --season 2024
+    python ops/build_name_changes.py --league wbb
+    python ops/build_name_changes.py --league mbb --season 2024
 
-Output: dev/ncaa_rapm/out/ncaa_{league}_name_changes.parquet
+Output (default): <repo>/<league>/name_changes/parquet/ncaa_{league}_name_changes.parquet
     season, team, name_game_time, name_current, n_games
+
+`n_games` counts GAMES, not shot attempts -- mappings are deduped per file.
+
+The raw tree resolves as --raw-root, then $NCAA_{WBB,MBB}_RAW_ROOT, then the
+sibling layout; --out overrides the destination. A file that cannot be parsed
+is logged and counted, and a non-empty failure ledger fails the RUN (exit 1),
+so an incomplete crosswalk can never look like a clean one.
 
 Only rows where the two CODED names differ are emitted -- comparing raw HTML
 strings yields false positives from entity/whitespace noise (an early run
@@ -56,7 +63,14 @@ _ROOT_ENV = {"wbb": "NCAA_WBB_RAW_ROOT", "mbb": "NCAA_MBB_RAW_ROOT"}
 
 
 def raw_dir(league: str, raw_root: "str | None" = None) -> Path:
-    """Resolve the raw tree: --raw-root, then $NCAA_{LG}_RAW_ROOT, then sibling."""
+    """Resolve the raw tree: --raw-root, then $NCAA_{LG}_RAW_ROOT, then sibling.
+
+    An explicit root may name EITHER the season tree (``…/<lg>/raw``) or the
+    directory holding the sibling ``-raw`` checkout; ``<base>/<tree>`` is
+    preferred when it exists, otherwise ``<base>`` is taken to BE the tree. The
+    caller sees which was chosen either way, because a resolved path with no
+    season dirs under it fails in ``main`` naming the path.
+    """
     repo, tree = _LEAGUE_REL[league]
     for base in (raw_root, os.environ.get(_ROOT_ENV[league])):
         if base:
@@ -124,7 +138,9 @@ def main(argv=None) -> int:
     ap.add_argument(
         "--raw-root",
         default=None,
-        help="Raw tree, or the dir containing the sibling -raw checkout. "
+        help="EITHER the season tree itself (…/<lg>/raw, holding 2010/, 2011/ …) "
+        "OR the directory containing the sibling -raw checkout; whichever is "
+        "given, the season dirs must end up directly beneath the resolved path. "
         "Falls back to $NCAA_{WBB,MBB}_RAW_ROOT, then the sibling layout.",
     )
     args = ap.parse_args(argv)
