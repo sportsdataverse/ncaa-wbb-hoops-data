@@ -60,11 +60,12 @@ so using it would make coverage 100% by construction. Each `in_*` flag is
 stamped from the committed per-season parquet of that dataset, and the flag SET
 is derived from `config.REGISTRY` (`level == "game"`), never hand-listed.
 
-**Current WBB state: the master is 88,590 contests over 2011-2026 and every
-`in_*` is 0.** The game-capture campaign for `ncaa-wbb-hoops-raw` has not run,
-so `wbb/json/` is empty and no per-season dataset has been built yet. That is
-reported as honest zeros over a real denominator rather than an empty file —
-when the capture lands, re-running stage 99 turns the same rows true.
+**Current WBB state: the capture campaign is COMPLETE.** The raw repo holds
+93,884 captured and parsed contests over 2010-2026 (99.83% of the
+94,042-contest denominator; the 158 stragglers are pageless/cancelled contests
+with no game page). All eleven datasets are built for all 17 seasons and
+published -- 178 units x 3 formats = 534 release assets. Re-run stage 99 after
+any rebuild so the coverage index matches the tree.
 
 ```bash
 NCAA_WBB_RAW_ROOT=../ncaa-wbb-hoops-raw \
@@ -141,11 +142,10 @@ This repo consumes the output of the Phase-1 raw scraper,
 `contest_id` is a NCAA string id (not an ESPN int) and stays `Utf8`
 everywhere in this package -- never cast to `Int64`.
 
-**No real season data exists yet.** The Phase-1 live backfill against
-`stats.ncaa.org` has not been run (it's a user-run job from a
-residential IP -- see `ncaa-wbb-hoops-raw`'s README). This builder currently
-has only the 4-game hermetic fixture bundled under
-`tests/fixtures/raw_root/wbb/` (season 2025). Running `run_build.sh`
+**The Phase-1 backfill has run** (2026-08-18): 93,884 contests captured and
+parsed across 2010-2026, and every dataset built and published from them. The
+4-game hermetic fixture under `tests/fixtures/raw_root/wbb/` (season 2025)
+remains for offline tests. Running `run_build.sh`
 against a real `NCAA_WBB_RAW_ROOT` today will only produce whatever games
 that checkout happens to have captured.
 
@@ -223,3 +223,41 @@ Wiring these datasets into sdv-py's `wbb_loaders` is a follow-up task, done
 *after* the first real publish. The loader introspects the live published
 parquet's footer schema, so it can't be generated until a real `ncaa_wbb_*`
 release exists on `sportsdataverse/sportsdataverse-data`.
+
+## Player name changes (`wbb/name_changes/`)
+
+stats.ncaa.org re-renders roster and box pages with a player's **current** name,
+while the play-by-play preserves the name **as it was at game time**. A player
+who changes their name therefore never matches between `possessions` and
+`team_rosters`, in any season, and no safe string rule bridges
+`KATELYNN.LIMARDO -> KATELYNN.MARTIN`.
+
+The `box_score` page binds both renderings to one numeric player id:
+
+```
+shot JS   addShot(..., '... player_768547579 team_201', ...)
+          "made by Miah Monahan(Eastern Ill.)"      <- game-time
+dropdown  <option value="768547579">Miah Meyer      <- current
+```
+
+`ops/build_name_changes.py` extracts that binding across the whole raw tree:
+
+```sh
+python ops/build_name_changes.py --league wbb
+```
+
+~3 minutes over 93,884 games -> 658 name-changes, written to
+`wbb/name_changes/parquet/ncaa_wbb_name_changes.parquet`
+(`season`, `team`, `name_game_time`, `name_current`, `n_games`).
+
+**Known gap: 2019+ only.** The binding is the shot-chart JS, and shot charts
+start in 2019 -- the same boundary that makes `shots` a 2019+ dataset. Earlier
+seasons still benefit where a career spans the boundary (WBB 2018 +2.06pp,
+2017 +0.72pp of fully-resolved possessions), but 2016 and older gain nothing.
+
+Only rows whose two **coded** names differ are emitted; comparing raw HTML
+strings yields false positives from entity/whitespace noise.
+
+**Not yet a published dataset** -- it is a committed artifact consumed by the
+sdv-py RAPM identity layer. Registering it in `config.REGISTRY` (and so on a
+release tag) is a separate decision.
