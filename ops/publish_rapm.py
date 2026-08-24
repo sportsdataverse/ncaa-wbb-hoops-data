@@ -36,6 +36,7 @@ before. Pass ``--publish`` to actually upload.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -184,9 +185,15 @@ def check_run_manifest(parquet: Path, frame_rows: int) -> "str | None":
     """Validate a season's completion manifest. Returns a reason to REFUSE, or None.
 
     The filename suffix proves a run was DECLARED partial. It cannot prove a run
-    that claimed to be full actually finished -- an interrupted or truncated
-    full run writes the canonical name with fewer teams and is otherwise
-    indistinguishable from a complete season. The manifest closes that gap.
+    that claimed to be full actually finished -- an interrupted or truncated run
+    writes the canonical name with fewer teams, clears the id match-rate floor
+    (the rows it has are fine), and is otherwise indistinguishable from a
+    complete season.
+
+    Validation is DENY-BY-DEFAULT. Every required field must be present with the
+    right type: a manifest that merely parses as JSON is not evidence. ``{}``
+    used to satisfy every check and be treated as proof, and ``null`` / ``[]``
+    crashed the publisher instead of refusing.
     """
     mf = parquet.with_suffix(".manifest.json")
     if not mf.exists():
@@ -195,14 +202,42 @@ def check_run_manifest(parquet: Path, frame_rows: int) -> "str | None":
         m = json.loads(mf.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return f"unreadable manifest {mf.name}: {exc}"
-    if m.get("partial"):
+    if not isinstance(m, dict):
+        return f"manifest {mf.name} is {type(m).__name__}, not an object"
+
+    required = {
+        "partial": bool,
+        "games_available": int,
+        "games_processed": int,
+        "games_failed": int,
+        "rows": int,
+        "sha256": str,
+    }
+    for field, typ in required.items():
+        if field not in m:
+            return f"manifest {mf.name} is missing {field!r} -- not completion evidence"
+        # bool is an int subclass; check it first so a bool cannot satisfy int
+        if typ is int and isinstance(m[field], bool):
+            return f"manifest {mf.name}: {field!r} is a bool, expected int"
+        if not isinstance(m[field], typ):
+            return f"manifest {mf.name}: {field!r} is {type(m[field]).__name__}, expected {typ.__name__}"
+
+    if m["partial"]:
         return f"manifest marks this a PARTIAL run (team={m.get('team')!r} limit={m.get('limit')!r})"
-    avail, done = m.get("games_available"), m.get("games_processed")
-    if isinstance(avail, int) and isinstance(done, int) and avail and done < avail:
-        return f"manifest shows a TRUNCATED run: {done:,}/{avail:,} games processed"
-    if isinstance(m.get("rows"), int) and m["rows"] != frame_rows:
-        return f"manifest rows={m['rows']:,} but the parquet holds {frame_rows:,} -- file changed after the run"
+    if m["games_failed"]:
+        return f"manifest reports {m['games_failed']:,} game(s) FAILED to parse -- coverage is incomplete"
+    if m["games_processed"] < m["games_available"]:
+        return (
+            f"manifest shows a TRUNCATED run: "
+            f"{m['games_processed']:,}/{m['games_available']:,} games processed"
+        )
+    if m["rows"] != frame_rows:
+        return f"manifest rows={m['rows']:,} but the parquet holds {frame_rows:,}"
+    actual = hashlib.sha256(parquet.read_bytes()).hexdigest()
+    if actual != m["sha256"]:
+        return f"parquet sha256 does not match the manifest -- {parquet.name} changed after the run"
     return None
+
 
 def fetch_rosters(league: str, dest: Path, seasons: "set[int] | None" = None) -> Path:
     """Ensure EVERY required roster season is present, not merely one.
