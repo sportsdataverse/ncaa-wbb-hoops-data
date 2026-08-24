@@ -307,7 +307,7 @@ rate cannot detect it). Ambiguity is nulled, never guessed.
 Note `sportsdataverse_save` uploads but never CREATES a release -- the tag must
 exist first (`gh release create`).
 
-Each build also writes `<parquet>.manifest.json` recording what the run actually
+Each build also writes `ncaa_wbb_rapm_<season>.manifest.json` recording what the run actually
 covered (partial flag, team/limit, games_processed vs games_available, teams
 rated, rows). The publisher REFUSES a season whose manifest is missing, marks it
 partial, shows a truncated run, or disagrees with the parquet's row count.

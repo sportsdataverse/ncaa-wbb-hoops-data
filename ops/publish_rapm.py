@@ -181,7 +181,9 @@ def augment_season(
     return out.drop("player_key")
 
 
-def check_run_manifest(parquet: Path, frame_rows: int) -> "str | None":
+def check_run_manifest(
+    parquet: Path, frame_rows: int, *, league: str, season: int
+) -> "str | None":
     """Validate a season's completion manifest. Returns a reason to REFUSE, or None.
 
     The filename suffix proves a run was DECLARED partial. It cannot prove a run
@@ -206,6 +208,9 @@ def check_run_manifest(parquet: Path, frame_rows: int) -> "str | None":
         return f"manifest {mf.name} is {type(m).__name__}, not an object"
 
     required = {
+        "league": str,
+        "season": int,
+        "parquet": str,
         "partial": bool,
         "games_available": int,
         "games_processed": int,
@@ -222,9 +227,18 @@ def check_run_manifest(parquet: Path, frame_rows: int) -> "str | None":
         if not isinstance(m[field], typ):
             return f"manifest {mf.name}: {field!r} is {type(m[field]).__name__}, expected {typ.__name__}"
 
+    # Identity, not just content. A completed parquet and its manifest copied
+    # onto another season's canonical filename keeps the same row count AND the
+    # same sha256, so content checks alone cannot catch it.
+    if m["league"] != league:
+        return f"manifest is for league {m['league']!r}, expected {league!r}"
+    if m["season"] != season:
+        return f"manifest is for season {m['season']}, expected {season}"
+    if m["parquet"] != parquet.name:
+        return f"manifest names {m['parquet']!r} but this file is {parquet.name!r}"
     if m["partial"]:
         return f"manifest marks this a PARTIAL run (team={m.get('team')!r} limit={m.get('limit')!r})"
-    if m["games_failed"]:
+    if m.get("games_failed"):
         return f"manifest reports {m['games_failed']:,} game(s) FAILED to parse -- coverage is incomplete"
     if m["games_processed"] < m["games_available"]:
         return (
@@ -376,6 +390,7 @@ def main() -> int:
 
     tot = 0
     hit = 0
+    refused = 0
     frames: list[tuple[int, pl.DataFrame]] = []
     for f in sorted(Path(a.rapm_dir).glob(f"ncaa_{a.league}_rapm_*.parquet")):
         m = re.search(r"rapm_(\d{4})\.parquet$", f.name)
@@ -391,7 +406,7 @@ def main() -> int:
             "player_id dtype disagreement"
         )
         aug = aug.join(bridge, on=["season", "team", "player_id"], how="left")
-        reason = check_run_manifest(f, pl.read_parquet(f).height)
+        reason = check_run_manifest(f, pl.read_parquet(f).height, league=a.league, season=season)
         # The escape hatch covers ONLY a missing manifest (the pre-manifest
         # corpus). A manifest that exists and says PARTIAL or TRUNCATED is
         # positive evidence of incompleteness and is never waivable.
@@ -402,7 +417,12 @@ def main() -> int:
             if a.publish:
                 print(f"ERROR: {season}: {reason}. Refusing to publish.", file=sys.stderr)
                 return 2
+            # A dry run must PREDICT the real run. Continuing to append a
+            # refused season made the plan claim it would publish a season
+            # that --publish would reject.
             print(f"  {season}: WOULD REFUSE -- {reason}", file=sys.stderr)
+            refused += 1
+            continue
         n = aug.height
         h = int(aug["player_id"].is_not_null().sum())
         tot += n

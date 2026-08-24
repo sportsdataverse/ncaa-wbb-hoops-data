@@ -105,22 +105,29 @@ def raw_season_dir(league: str, season: int) -> Path:
     return _ROOT / repo / lg / "raw" / str(season)
 
 
-def game_events(path: Path, league: str) -> "dict[str, list]":
+def game_events(path: Path, league: str) -> "dict[str, list] | None":
     """Parse one bundle into ``{team: [LineupEvent, ...]}`` for both teams.
 
     A team whose box lineup or stint parse fails is skipped rather than
     aborting the game -- the other team's events are still usable, matching the
     per-family robustness contract of the raw parse stage.
+
+    Returns ``None`` when the GAME could not be read at all (corrupt archive,
+    missing pages, unparseable play-by-play). Those four paths used to return
+    ``{}``, which the caller could not tell from a game that simply produced no
+    events -- so a run over broken input still reported ``games_failed=0``.
+    ``{}`` now means "parsed, yielded nothing", which is a data limit rather
+    than a failure.
     """
     try:
         with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
             bundle = json.load(fh)
     except (OSError, json.JSONDecodeError, EOFError):
-        return {}
+        return None
     pages = bundle.get("pages") or {}
     pbp_html, box_html = pages.get("play_by_play"), pages.get("individual_stats")
     if not pbp_html or not box_html:
-        return {}
+        return None
     cid = str(bundle.get("contest_id") or path.stem)
 
     model = wbb_period_model(bundle.get("season")) if league == "wbb" else None
@@ -128,9 +135,9 @@ def game_events(path: Path, league: str) -> "dict[str, list]":
     try:
         pbp = parse_ncaa_bb_game_pbp(pbp_html, cid, **kw)
     except Exception:  # noqa: BLE001 -- one bad game must not kill a season
-        return {}
+        return None
     if not pbp.height:
-        return {}
+        return None
 
     out: "dict[str, list]" = {}
     for team in (pbp["home"][0], pbp["away"][0]):
@@ -294,6 +301,7 @@ def main(argv=None) -> int:
     print(f"  {args.league} {args.season}: {len(files)} games, workers={args.workers}", flush=True)
 
     failed = 0
+    empty = 0
     by_team: "defaultdict[str, list]" = defaultdict(list)
     payload = [(str(f), args.league) for f in files]
     if args.workers > 1:
@@ -302,6 +310,8 @@ def main(argv=None) -> int:
                 if res is None:
                     failed += 1
                     continue
+                if not res:
+                    empty += 1
                 for t, evs in res.items():
                     by_team[t].extend(evs)
                 if i % 500 == 0:
@@ -312,6 +322,8 @@ def main(argv=None) -> int:
             if res is None:
                 failed += 1
                 continue
+            if not res:
+                empty += 1
             for t, evs in res.items():
                 by_team[t].extend(evs)
             if i % 100 == 0:
@@ -412,6 +424,7 @@ def main(argv=None) -> int:
         "baseline_teams": len(baseline_teams),
         "teams_rated": len(teams),
         "games_failed": failed,
+        "games_empty": empty,
         "rows": int(df.height),
         "parquet": f.name,
         # Binds the manifest to THIS file. A row count alone cannot tell a
