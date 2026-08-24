@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import sys
 from collections import defaultdict
@@ -104,22 +105,29 @@ def raw_season_dir(league: str, season: int) -> Path:
     return _ROOT / repo / lg / "raw" / str(season)
 
 
-def game_events(path: Path, league: str) -> "dict[str, list]":
+def game_events(path: Path, league: str) -> "dict[str, list] | None":
     """Parse one bundle into ``{team: [LineupEvent, ...]}`` for both teams.
 
     A team whose box lineup or stint parse fails is skipped rather than
     aborting the game -- the other team's events are still usable, matching the
     per-family robustness contract of the raw parse stage.
+
+    Returns ``None`` when the GAME could not be read at all (corrupt archive,
+    missing pages, unparseable play-by-play). Those four paths used to return
+    ``{}``, which the caller could not tell from a game that simply produced no
+    events -- so a run over broken input still reported ``games_failed=0``.
+    ``{}`` now means "parsed, yielded nothing", which is a data limit rather
+    than a failure.
     """
     try:
         with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
             bundle = json.load(fh)
     except (OSError, json.JSONDecodeError, EOFError):
-        return {}
+        return None
     pages = bundle.get("pages") or {}
     pbp_html, box_html = pages.get("play_by_play"), pages.get("individual_stats")
     if not pbp_html or not box_html:
-        return {}
+        return None
     cid = str(bundle.get("contest_id") or path.stem)
 
     model = wbb_period_model(bundle.get("season")) if league == "wbb" else None
@@ -127,9 +135,9 @@ def game_events(path: Path, league: str) -> "dict[str, list]":
     try:
         pbp = parse_ncaa_bb_game_pbp(pbp_html, cid, **kw)
     except Exception:  # noqa: BLE001 -- one bad game must not kill a season
-        return {}
+        return None
     if not pbp.height:
-        return {}
+        return None
 
     out: "dict[str, list]" = {}
     for team in (pbp["home"][0], pbp["away"][0]):
@@ -148,11 +156,17 @@ def game_events(path: Path, league: str) -> "dict[str, list]":
 
 
 def _worker(args):
+    """Returns the per-team events, or None when the game FAILED to parse.
+
+    Returning ``{}`` for a failure made it indistinguishable from a game that
+    legitimately produced no events, so a run with silently broken games still
+    reported complete coverage in its manifest.
+    """
     path, league = args
     try:
         return {t: evs for t, evs in game_events(Path(path), league).items()}
     except Exception:  # noqa: BLE001
-        return {}
+        return None
 
 
 def league_baseline(all_buckets: "dict[str, list]") -> "tuple[float, float]":
@@ -286,18 +300,31 @@ def main(argv=None) -> int:
         files = files[: args.limit]
     print(f"  {args.league} {args.season}: {len(files)} games, workers={args.workers}", flush=True)
 
+    failed = 0
+    empty = 0
     by_team: "defaultdict[str, list]" = defaultdict(list)
     payload = [(str(f), args.league) for f in files]
     if args.workers > 1:
         with ProcessPoolExecutor(max_workers=args.workers) as ex:
             for i, res in enumerate(ex.map(_worker, payload, chunksize=8), 1):
+                if res is None:
+                    failed += 1
+                    continue
+                if not res:
+                    empty += 1
                 for t, evs in res.items():
                     by_team[t].extend(evs)
                 if i % 500 == 0:
                     print(f"    {i}/{len(files)} games, {len(by_team)} teams", flush=True)
     else:
         for i, p in enumerate(payload, 1):
-            for t, evs in _worker(p).items():
+            res = _worker(p)
+            if res is None:
+                failed += 1
+                continue
+            if not res:
+                empty += 1
+            for t, evs in res.items():
                 by_team[t].extend(evs)
             if i % 100 == 0:
                 print(f"    {i}/{len(files)} games, {len(by_team)} teams", flush=True)
@@ -372,7 +399,40 @@ def main(argv=None) -> int:
     f = out / f"ncaa_{args.league}_rapm_{args.season}{suffix}.parquet"
     if suffix:
         print(f"  PARTIAL run -> {f.name} (not the full-season output)", flush=True)
+    # Remove any prior manifest BEFORE the parquet changes. An interruption
+    # between the two writes must leave NO manifest (-> refused), never the
+    # previous run's manifest sitting beside a new parquet.
+    mf_path = f.with_suffix(".manifest.json")
+    mf_path.unlink(missing_ok=True)
     df.write_parquet(f)
+
+    # Completion manifest. The filename suffix proves a run was DECLARED
+    # partial; it cannot prove a run that claimed to be full actually finished.
+    # An interrupted or truncated full run writes the canonical name with fewer
+    # teams and would otherwise be indistinguishable from a complete season.
+    # The manifest records what the run actually covered, and the publisher
+    # refuses to ship a season without one.
+    manifest = {
+        "league": args.league,
+        "season": args.season,
+        "partial": bool(args.team or args.limit),
+        "team": args.team,
+        "limit": args.limit or None,
+        "di_only": bool(args.di_only),
+        "games_available": len(sorted(d.glob("*.json.gz"))),
+        "games_processed": len(files),
+        "baseline_teams": len(baseline_teams),
+        "teams_rated": len(teams),
+        "games_failed": failed,
+        "games_empty": empty,
+        "rows": int(df.height),
+        "parquet": f.name,
+        # Binds the manifest to THIS file. A row count alone cannot tell a
+        # changed parquet from the one the run produced.
+        "sha256": hashlib.sha256(f.read_bytes()).hexdigest(),
+    }
+    mf_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+    print(f"  manifest -> {mf_path.name}", flush=True)
     print(f"  teams={len(teams)} rated_rows={df.height} -> {f}")
     return 0
 

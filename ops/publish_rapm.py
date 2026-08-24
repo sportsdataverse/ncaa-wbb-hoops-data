@@ -36,6 +36,8 @@ before. Pass ``--publish`` to actually upload.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import math
 import re
 import subprocess
@@ -179,6 +181,78 @@ def augment_season(
     return out.drop("player_key")
 
 
+def check_run_manifest(
+    parquet: Path, frame_rows: int, *, league: str, season: int
+) -> "str | None":
+    """Validate a season's completion manifest. Returns a reason to REFUSE, or None.
+
+    The filename suffix proves a run was DECLARED partial. It cannot prove a run
+    that claimed to be full actually finished -- an interrupted or truncated run
+    writes the canonical name with fewer teams, clears the id match-rate floor
+    (the rows it has are fine), and is otherwise indistinguishable from a
+    complete season.
+
+    Validation is DENY-BY-DEFAULT. Every required field must be present with the
+    right type: a manifest that merely parses as JSON is not evidence. ``{}``
+    used to satisfy every check and be treated as proof, and ``null`` / ``[]``
+    crashed the publisher instead of refusing.
+    """
+    mf = parquet.with_suffix(".manifest.json")
+    if not mf.exists():
+        return f"no completion manifest ({mf.name}); re-run ops/build_rapm.py for this season"
+    try:
+        m = json.loads(mf.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return f"unreadable manifest {mf.name}: {exc}"
+    if not isinstance(m, dict):
+        return f"manifest {mf.name} is {type(m).__name__}, not an object"
+
+    required = {
+        "league": str,
+        "season": int,
+        "parquet": str,
+        "partial": bool,
+        "games_available": int,
+        "games_processed": int,
+        "games_failed": int,
+        "rows": int,
+        "sha256": str,
+    }
+    for field, typ in required.items():
+        if field not in m:
+            return f"manifest {mf.name} is missing {field!r} -- not completion evidence"
+        # bool is an int subclass; check it first so a bool cannot satisfy int
+        if typ is int and isinstance(m[field], bool):
+            return f"manifest {mf.name}: {field!r} is a bool, expected int"
+        if not isinstance(m[field], typ):
+            return f"manifest {mf.name}: {field!r} is {type(m[field]).__name__}, expected {typ.__name__}"
+
+    # Identity, not just content. A completed parquet and its manifest copied
+    # onto another season's canonical filename keeps the same row count AND the
+    # same sha256, so content checks alone cannot catch it.
+    if m["league"] != league:
+        return f"manifest is for league {m['league']!r}, expected {league!r}"
+    if m["season"] != season:
+        return f"manifest is for season {m['season']}, expected {season}"
+    if m["parquet"] != parquet.name:
+        return f"manifest names {m['parquet']!r} but this file is {parquet.name!r}"
+    if m["partial"]:
+        return f"manifest marks this a PARTIAL run (team={m.get('team')!r} limit={m.get('limit')!r})"
+    if m.get("games_failed"):
+        return f"manifest reports {m['games_failed']:,} game(s) FAILED to parse -- coverage is incomplete"
+    if m["games_processed"] < m["games_available"]:
+        return (
+            f"manifest shows a TRUNCATED run: "
+            f"{m['games_processed']:,}/{m['games_available']:,} games processed"
+        )
+    if m["rows"] != frame_rows:
+        return f"manifest rows={m['rows']:,} but the parquet holds {frame_rows:,}"
+    actual = hashlib.sha256(parquet.read_bytes()).hexdigest()
+    if actual != m["sha256"]:
+        return f"parquet sha256 does not match the manifest -- {parquet.name} changed after the run"
+    return None
+
+
 def fetch_rosters(league: str, dest: Path, seasons: "set[int] | None" = None) -> Path:
     """Ensure EVERY required roster season is present, not merely one.
 
@@ -229,6 +303,14 @@ def main() -> int:
     )
     ap.add_argument(
         "--publish", action="store_true", help="actually upload (default: dry run)"
+    )
+    ap.add_argument(
+        "--allow-unmanifested",
+        action="store_true",
+        help="Publish seasons that have NO completion manifest. For the "
+        "pre-manifest corpus only -- it WAIVES the completeness proof, it does "
+        "not supply one. Never silences a manifest that says PARTIAL or "
+        "TRUNCATED.",
     )
     a = ap.parse_args()
     # `rate < float("nan")` is False, so a NaN floor would wave through a zero
@@ -308,6 +390,7 @@ def main() -> int:
 
     tot = 0
     hit = 0
+    refused = 0
     frames: list[tuple[int, pl.DataFrame]] = []
     for f in sorted(Path(a.rapm_dir).glob(f"ncaa_{a.league}_rapm_*.parquet")):
         m = re.search(r"rapm_(\d{4})\.parquet$", f.name)
@@ -323,6 +406,23 @@ def main() -> int:
             "player_id dtype disagreement"
         )
         aug = aug.join(bridge, on=["season", "team", "player_id"], how="left")
+        reason = check_run_manifest(f, pl.read_parquet(f).height, league=a.league, season=season)
+        # The escape hatch covers ONLY a missing manifest (the pre-manifest
+        # corpus). A manifest that exists and says PARTIAL or TRUNCATED is
+        # positive evidence of incompleteness and is never waivable.
+        if reason and a.allow_unmanifested and reason.startswith("no completion manifest"):
+            print(f"  {season}: WARNING -- unmanifested, publishing anyway (--allow-unmanifested)", file=sys.stderr)
+            reason = None
+        if reason:
+            if a.publish:
+                print(f"ERROR: {season}: {reason}. Refusing to publish.", file=sys.stderr)
+                return 2
+            # A dry run must PREDICT the real run. Continuing to append a
+            # refused season made the plan claim it would publish a season
+            # that --publish would reject.
+            print(f"  {season}: WOULD REFUSE -- {reason}", file=sys.stderr)
+            refused += 1
+            continue
         n = aug.height
         h = int(aug["player_id"].is_not_null().sum())
         tot += n

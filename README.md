@@ -307,6 +307,19 @@ rate cannot detect it). Ambiguity is nulled, never guessed.
 Note `sportsdataverse_save` uploads but never CREATES a release -- the tag must
 exist first (`gh release create`).
 
+Each build also writes `ncaa_wbb_rapm_<season>.manifest.json` recording what the run actually
+covered (partial flag, team/limit, games_processed vs games_available, teams
+rated, rows). The publisher REFUSES a season whose manifest is missing, marks it
+partial, shows a truncated run, or disagrees with the parquet's row count.
+
+The filename suffix only proves a run was *declared* partial; it cannot prove a
+run that claimed to be full actually finished. An interrupted full run writes
+the canonical name with fewer teams and still clears the match-rate floor.
+
+`--allow-unmanifested` covers the pre-manifest corpus only. It waives the proof
+rather than supplying one, and never silences a manifest that says PARTIAL or
+TRUNCATED.
+
 ~0.51 s/game single-threaded; 8 workers does a season in ~9 min.
 
 **D-I scoping is on by default and is not cosmetic.** Rating every team that
