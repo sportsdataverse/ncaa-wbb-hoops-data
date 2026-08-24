@@ -325,6 +325,14 @@ def main(argv=None) -> int:
             )
             return 2
 
+    if args.team and args.di_only and args.team not in baseline_teams:
+        print(
+            f"ERROR: --team {args.team!r} is not in the D-I scope for "
+            f"{args.league} {args.season}. Rating an out-of-scope team against a "
+            f"D-I baseline is not meaningful; pass --all-teams to do it anyway.",
+            file=sys.stderr,
+        )
+        return 2
     teams = [args.team] if args.team else baseline_teams
 
     # One pass to bucket every BASELINE team, so the D1 baseline is measured on
@@ -351,13 +359,16 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     # write_parquet overwrites silently, so a --team/--limit proof run would
     # otherwise replace a complete season. Partial runs get their own name.
+    # The suffix marks PROVENANCE, so it is applied even with --out (which
+    # chooses the directory, not the name). Otherwise `--team X --out <dir>`
+    # writes the canonical season filename and a one-team frame can later be
+    # published as if it were a complete season.
     suffix = ""
-    if not args.out:
-        if args.team:
-            slug = re.sub(r"[^A-Za-z0-9]+", "-", args.team).strip("-").lower()
-            suffix += f"__team-{slug}"
-        if args.limit:
-            suffix += f"__limit-{args.limit}"
+    if args.team:
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", args.team).strip("-").lower()
+        suffix += f"__team-{slug}"
+    if args.limit:
+        suffix += f"__limit-{args.limit}"
     f = out / f"ncaa_{args.league}_rapm_{args.season}{suffix}.parquet"
     if suffix:
         print(f"  PARTIAL run -> {f.name} (not the full-season output)", flush=True)

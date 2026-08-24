@@ -49,6 +49,8 @@ import polars as pl
 SUFFIX = re.compile(r"(?i)^(jr|sr|ii|iii|iv|v)\.?$")
 NICKNAME = re.compile(r'["“”].*?["“”]')
 DEFAULT_REPO = "sportsdataverse/sportsdataverse-data"
+#: Hard release floor. --min-match-rate may RAISE this, never lower it.
+RELEASE_FLOOR = 0.99
 
 
 def _clean_token(tok: str) -> str:
@@ -177,9 +179,22 @@ def augment_season(
     return out.drop("player_key")
 
 
-def fetch_rosters(league: str, dest: Path) -> Path:
+def fetch_rosters(league: str, dest: Path, seasons: "set[int] | None" = None) -> Path:
+    """Ensure EVERY required roster season is present, not merely one.
+
+    A cache holding a single season used to satisfy the old `any(...)` check;
+    every other season then had no roster, was skipped, and the match rate was
+    computed over the surviving subset -- so a partial cache could publish an
+    incomplete release that still cleared the floor.
+    """
     dest.mkdir(parents=True, exist_ok=True)
-    if not any(dest.glob(f"ncaa_{league}_team_rosters_*.parquet")):
+    have = {
+        int(f.stem.rsplit("_", 1)[1])
+        for f in dest.glob(f"ncaa_{league}_team_rosters_*.parquet")
+        if f.stem.rsplit("_", 1)[1].isdigit()
+    }
+    missing = (seasons - have) if seasons else (set() if have else {0})
+    if missing:
         subprocess.run(
             [
                 "gh",
@@ -205,16 +220,24 @@ def main() -> int:
     ap.add_argument("--league", choices=["mbb", "wbb"], required=True)
     ap.add_argument("--rapm-dir", required=True)
     ap.add_argument("--roster-dir", default=None)
-    ap.add_argument("--min-match-rate", type=float, default=0.99)
+    ap.add_argument("--min-match-rate", type=float, default=RELEASE_FLOOR)
+    ap.add_argument(
+        "--name-changes",
+        default=None,
+        help="Path to ncaa_{lg}_name_changes.parquet (default: search the canonical "
+             "<repo>/<league>/name_changes/parquet dir, then --rapm-dir).",
+    )
     ap.add_argument(
         "--publish", action="store_true", help="actually upload (default: dry run)"
     )
     a = ap.parse_args()
     # `rate < float("nan")` is False, so a NaN floor would wave through a zero
     # match rate. Reject any non-finite or out-of-range floor outright.
-    if not math.isfinite(a.min_match_rate) or not (0.0 <= a.min_match_rate <= 1.0):
+    if not math.isfinite(a.min_match_rate) or not (RELEASE_FLOOR <= a.min_match_rate <= 1.0):
         print(
-            f"ERROR: --min-match-rate must be a finite fraction in [0, 1]; got {a.min_match_rate!r}",
+            f"ERROR: --min-match-rate must be a finite fraction in "
+            f"[{RELEASE_FLOOR}, 1]; got {a.min_match_rate!r}. The release floor "
+            f"cannot be lowered -- it is the publish gate, not a preference.",
             file=sys.stderr,
         )
         return 2
@@ -225,7 +248,17 @@ def main() -> int:
         if a.roster_dir
         else Path(tempfile.gettempdir()) / f"rapm_rosters_{a.league}"
     )
-    rosters_dir = fetch_rosters(a.league, roster_root)
+    # Only the canonical per-season files are publishable inputs; partial runs
+    # carry a __team-/__limit- suffix and must not be mistaken for a season.
+    required = {
+        int(m.group(1))
+        for f in Path(a.rapm_dir).glob(f"ncaa_{a.league}_rapm_*.parquet")
+        if (m := re.search(r"rapm_(\d{4})\.parquet$", f.name))
+    }
+    if not required:
+        print(f"ERROR: no canonical season files in {a.rapm_dir}", file=sys.stderr)
+        return 2
+    rosters_dir = fetch_rosters(a.league, roster_root, required)
 
     from sportsdataverse.mbb.mbb_ncaa_rapm_input import build_person_keys
 
@@ -236,7 +269,26 @@ def main() -> int:
         ],
         how="diagonal_relaxed",
     )
-    nc = Path(a.rapm_dir) / f"ncaa_{a.league}_name_changes.parquet"
+    # build_name_changes.py writes to <repo>/<league>/name_changes/parquet, NOT
+    # to the RAPM output dir -- looking only in --rapm-dir silently built the
+    # person keys with no crosswalk, so a renamed player became two people.
+    nc_candidates = (
+        [Path(a.name_changes)]
+        if a.name_changes
+        else [
+            Path(__file__).resolve().parents[1] / a.league / "name_changes" / "parquet"
+            / f"ncaa_{a.league}_name_changes.parquet",
+            Path(a.rapm_dir) / f"ncaa_{a.league}_name_changes.parquet",
+        ]
+    )
+    nc = next((c for c in nc_candidates if c.exists()), nc_candidates[-1])
+    if not nc.exists():
+        print(
+            f"WARNING: no name-change crosswalk found (looked in "
+            f"{[str(c) for c in nc_candidates]}). person_id will treat a renamed "
+            f"player as two people.",
+            file=sys.stderr,
+        )
     keys = build_person_keys(
         all_ros, name_changes=pl.read_parquet(nc) if nc.exists() else None
     )
@@ -269,7 +321,8 @@ def main() -> int:
         tot += n
         hit += h
         frames.append((season, aug))
-        print(f"  {season}: rows={n:,} id-matched={h:,} ({h / n:.2%})")
+        pct = (h / n) if n else 0.0
+        print(f"  {season}: rows={n:,} id-matched={h:,} ({pct:.2%})")
 
     rate = hit / tot if tot else 0.0
     print(
