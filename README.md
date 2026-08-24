@@ -339,3 +339,36 @@ leaderboard resolves to real elite players (Brink, Cardoso, Fulwiley, Ejim).
 **This engine's RAPM is WITHIN-TEAM**: it apportions one team's performance
 across its own players, a different estimand from league-wide RAPM. Provisional
 -- not yet oracle-gated against Torvik/KenPom, and not published.
+
+## League-wide RAPM (`ops/build_rapm_league.py`)
+
+The LEAGUE-WIDE estimand ("Path B") -- one joint O/D ridge per season over
+all D-I possessions, published to `ncaa_{lg}_rapm` (the within-team dataset
+above is a different estimand and a different tag; every league row carries
+`estimand="league"`). Reads this repo's published `possessions` +
+`team_rosters` + `name_changes` trees and the sdv-py modules
+`mbb_ncaa_rapm_input` (identity) + `mbb_ncaa_rapm_league` (stints + solver;
+league-blind -- WBB passes its own frames).
+
+```sh
+# stages 1-2: build + gates + completion manifest (per season or --all)
+uv run python ops/build_rapm_league.py --league mbb --season 2024
+uv run python ops/build_rapm_league.py --league mbb --all
+
+# stage 3: dry run (default) revalidates every manifest; --publish uploads
+uv run python ops/publish_rapm_league.py --league mbb
+uv run python ops/publish_rapm_league.py --league mbb --publish
+```
+
+Publishing is gated, floors frozen from the observed 2026-08-24 validation
+sweep and NEVER lowered (`--min-spearman` may only raise): usable-possession
+fraction >= 0.65 (this is what excludes the degenerate 2010 corpus),
+intercept/HCA era bands (Spearman is scale-blind), and the external Torvik
+team-aggregate gate -- Spearman(team_net, adjem) >= 0.93 (mbb) / 0.89 (wbb)
+on >= 250 joined teams against `ops/oracle/ncaa_{lg}_torvik.parquet`
+(provenance in `ops/oracle/README.md`). WBB 2011-2020 have no Torvik
+women's oracle and publish via the explicit `UNGATED_SEASONS` allowlist
+(internal gates still enforced). A failed season writes NOTHING; the
+publisher refuses any season whose manifest is missing, gate-failed, or
+inconsistent with the parquet (`check_run_manifest` + the league-gate
+record), and enforces a median gated-Spearman >= 0.95 across the publish set.
