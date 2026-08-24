@@ -36,6 +36,7 @@ before. Pass ``--publish`` to actually upload.
 from __future__ import annotations
 
 import argparse
+import math
 import re
 import subprocess
 import sys
@@ -97,7 +98,21 @@ def augment_season(
             pl.col("team_id").cast(pl.Utf8),
         )
         .filter(pl.col("player_key") != "")
-        .unique(subset=["team", "player_key"], keep="first")
+        .unique()
+    )
+    # A normalized key resolving to MORE THAN ONE player_id is two people
+    # sharing a rendering. `unique(keep="first")` would hand the RAPM row an
+    # ARBITRARY one of them -- the same wrong-attribution class this pipeline
+    # exists to avoid, and the reason `build_player_xwalk` drops these too.
+    # Exclude the key entirely BEFORE the join so the row stays unresolved.
+    unambiguous = (
+        ros.group_by(["team", "player_key"])
+        .agg(pl.col("player_id").n_unique().alias("_n"))
+        .filter(pl.col("_n") == 1)
+        .select(["team", "player_key"])
+    )
+    ros = ros.join(unambiguous, on=["team", "player_key"], how="inner").unique(
+        subset=["team", "player_key"], keep="first"
     )
     out = rapm.join(ros, on=["team", "player_key"], how="left")
 
@@ -195,6 +210,14 @@ def main() -> int:
         "--publish", action="store_true", help="actually upload (default: dry run)"
     )
     a = ap.parse_args()
+    # `rate < float("nan")` is False, so a NaN floor would wave through a zero
+    # match rate. Reject any non-finite or out-of-range floor outright.
+    if not math.isfinite(a.min_match_rate) or not (0.0 <= a.min_match_rate <= 1.0):
+        print(
+            f"ERROR: --min-match-rate must be a finite fraction in [0, 1]; got {a.min_match_rate!r}",
+            file=sys.stderr,
+        )
+        return 2
 
     tag = f"ncaa_{a.league}_rapm_within_team"
     roster_root = (

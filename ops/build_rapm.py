@@ -24,8 +24,8 @@ frame; keeping both lets each be checked against the other.
 Cost: ~0.51 s/game single-threaded, so ~47 min per season and ~13.4 h for one
 league's 17 seasons. Per-game work is independent, so it parallelizes.
 
-    python dev/ncaa_rapm/build_rapm.py --league wbb --season 2024 --team "Duke"
-    python dev/ncaa_rapm/build_rapm.py --league wbb --season 2024 --workers 10
+    uv run python ops/build_rapm.py --league wbb --season 2024 --team "Duke"
+    uv run python ops/build_rapm.py --league wbb --season 2024 --workers 10
 """
 
 from __future__ import annotations
@@ -36,6 +36,8 @@ import json
 import sys
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
+import os
+import re
 from pathlib import Path
 
 import polars as pl
@@ -60,7 +62,12 @@ _RAW = {
     "wbb": ("wehoop-dev/ncaa-wbb-hoops-raw", "wbb"),
     "mbb": ("hoopR-dev/ncaa-mbb-hoops-raw", "mbb"),
 }
-_ROOT = Path("c:/Users/saiem/Documents/GitHub-Data/sdv-dev")
+# Workspace root holding the sibling -raw / -data checkouts. Resolution order:
+# --workspace-root, then $SDV_WORKSPACE_ROOT, then inferred from this file's
+# location (<root>/<org-dir>/<repo>/ops/build_rapm.py). Never a hardcoded path.
+_ROOT = Path(
+    os.environ.get("SDV_WORKSPACE_ROOT") or Path(__file__).resolve().parents[3]
+)
 
 _DATA = {
     "wbb": ("wehoop-dev/ncaa-wbb-hoops-data", "wbb", "ncaa_wbb"),
@@ -253,6 +260,11 @@ def main(argv=None) -> int:
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--out", default=None)
     ap.add_argument(
+        "--workspace-root",
+        default=None,
+        help="Root holding the sibling -raw/-data checkouts (or $SDV_WORKSPACE_ROOT).",
+    )
+    ap.add_argument(
         "--all-teams",
         dest="di_only",
         action="store_false",
@@ -261,6 +273,9 @@ def main(argv=None) -> int:
     )
     ap.set_defaults(di_only=True)
     args = ap.parse_args(argv)
+    if args.workspace_root:
+        global _ROOT
+        _ROOT = Path(args.workspace_root)
 
     d = raw_season_dir(args.league, args.season)
     if not d.is_dir():
@@ -287,20 +302,36 @@ def main(argv=None) -> int:
             if i % 100 == 0:
                 print(f"    {i}/{len(files)} games, {len(by_team)} teams", flush=True)
 
-    teams = [args.team] if args.team else sorted(by_team)
-
-    if args.di_only and not args.team:
+    # The BASELINE set and the OUTPUT set are different things. `--team` must
+    # narrow only what gets WRITTEN: if it also narrowed the baseline, the
+    # league offset would be computed from one team and that team's ratings
+    # would not match its ratings in a full run.
+    baseline_teams = sorted(by_team)
+    if args.di_only:
         di = di_teams(args.league, args.season)
         if di:
-            before = len(teams)
-            teams = [t for t in teams if t in di]
-            print(f"  D-I scope: {len(teams)}/{before} teams kept", flush=True)
+            before = len(baseline_teams)
+            baseline_teams = [t for t in baseline_teams if t in di]
+            print(f"  D-I scope: {len(baseline_teams)}/{before} teams kept", flush=True)
         else:
-            print("  WARNING: no team_rosters found -- D-I scope NOT applied", flush=True)
+            # Fail closed. Rating everyone silently wrecks the distribution
+            # (see di_teams: ALL -> mean -1.85 / max|r| 33.3 vs D-I -0.03 / 9.2),
+            # and a run that quietly did that is worse than no run.
+            print(
+                "ERROR: --di-only is set but no team_rosters were found, so D-I "
+                "scope cannot be applied. Pass --all-teams to rate every team "
+                "deliberately.",
+                file=sys.stderr,
+            )
+            return 2
 
-    # One pass to bucket every team, so the D1 baseline is measured on the same
-    # data the ratings are fit to rather than assumed.
-    buckets_by_team = {t: agg.lineup_stats_buckets(by_team[t]) for t in teams if by_team.get(t)}
+    teams = [args.team] if args.team else baseline_teams
+
+    # One pass to bucket every BASELINE team, so the D1 baseline is measured on
+    # the same data the ratings are fit to rather than assumed.
+    buckets_by_team = {
+        t: agg.lineup_stats_buckets(by_team[t]) for t in baseline_teams if by_team.get(t)
+    }
     off_base, def_base = league_baseline(buckets_by_team)
     print(f"  D1 baseline adj_ppp: off={off_base:.2f} def={def_base:.2f}", flush=True)
 
@@ -318,7 +349,18 @@ def main(argv=None) -> int:
     df = pl.DataFrame(rows) if rows else pl.DataFrame()
     out = Path(args.out) if args.out else Path(__file__).parent / "out"
     out.mkdir(parents=True, exist_ok=True)
-    f = out / f"ncaa_{args.league}_rapm_{args.season}.parquet"
+    # write_parquet overwrites silently, so a --team/--limit proof run would
+    # otherwise replace a complete season. Partial runs get their own name.
+    suffix = ""
+    if not args.out:
+        if args.team:
+            slug = re.sub(r"[^A-Za-z0-9]+", "-", args.team).strip("-").lower()
+            suffix += f"__team-{slug}"
+        if args.limit:
+            suffix += f"__limit-{args.limit}"
+    f = out / f"ncaa_{args.league}_rapm_{args.season}{suffix}.parquet"
+    if suffix:
+        print(f"  PARTIAL run -> {f.name} (not the full-season output)", flush=True)
     df.write_parquet(f)
     print(f"  teams={len(teams)} rated_rows={df.height} -> {f}")
     return 0

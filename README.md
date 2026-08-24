@@ -279,7 +279,7 @@ The call sequence is copied from sdv-py's committed end-to-end test, so the
 bucket shape is right by construction rather than inferred.
 
 ```sh
-python ops/build_rapm.py --league wbb --season 2024 --workers 8
+uv run python ops/build_rapm.py --league wbb --season 2024 --workers 8
 ```
 
 ~0.51 s/game single-threaded; 8 workers does a season in ~9 min.
