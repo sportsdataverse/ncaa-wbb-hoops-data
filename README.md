@@ -282,6 +282,31 @@ bucket shape is right by construction rather than inferred.
 uv run python ops/build_rapm.py --league wbb --season 2024 --workers 8
 ```
 
+### Publishing it (`ops/publish_rapm.py`)
+
+Stage 3. `build_rapm.py` emits a frame keyed on team plus a DISPLAY name; the
+publisher attaches `season` / `team_id` / `player_id` / `person_id` and uploads
+the `ncaa_wbb_rapm_within_team` release dataset via `sportsdataverse.release`.
+
+```sh
+# dry run (default) -- runs the full join and enforces the floor, uploads nothing
+uv run python ops/publish_rapm.py --league wbb --rapm-dir ops/out
+
+# publish
+uv run python ops/publish_rapm.py --league wbb --rapm-dir ops/out --publish
+```
+
+**The estimand is WITHIN-TEAM**, not league-wide -- the tag name says so, and
+`ncaa_wbb_rapm` stays free for a future league-wide (Path B) dataset.
+
+Publishing is gated: a 99% id match-rate FLOOR that `--min-match-rate` may raise
+but never lower, and a hard refusal when the name-change crosswalk is missing
+(without it a renamed player silently becomes two `person_id`s and the match
+rate cannot detect it). Ambiguity is nulled, never guessed.
+
+Note `sportsdataverse_save` uploads but never CREATES a release -- the tag must
+exist first (`gh release create`).
+
 ~0.51 s/game single-threaded; 8 workers does a season in ~9 min.
 
 **D-I scoping is on by default and is not cosmetic.** Rating every team that
