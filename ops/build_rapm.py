@@ -373,6 +373,30 @@ def main(argv=None) -> int:
     if suffix:
         print(f"  PARTIAL run -> {f.name} (not the full-season output)", flush=True)
     df.write_parquet(f)
+
+    # Completion manifest. The filename suffix proves a run was DECLARED
+    # partial; it cannot prove a run that claimed to be full actually finished.
+    # An interrupted or truncated full run writes the canonical name with fewer
+    # teams and would otherwise be indistinguishable from a complete season.
+    # The manifest records what the run actually covered, and the publisher
+    # refuses to ship a season without one.
+    manifest = {
+        "league": args.league,
+        "season": args.season,
+        "partial": bool(args.team or args.limit),
+        "team": args.team,
+        "limit": args.limit or None,
+        "di_only": bool(args.di_only),
+        "games_available": len(sorted(d.glob("*.json.gz"))),
+        "games_processed": len(files),
+        "baseline_teams": len(baseline_teams),
+        "teams_rated": len(teams),
+        "rows": int(df.height),
+        "parquet": f.name,
+    }
+    mf_path = f.with_suffix(".manifest.json")
+    mf_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+    print(f"  manifest -> {mf_path.name}", flush=True)
     print(f"  teams={len(teams)} rated_rows={df.height} -> {f}")
     return 0
 

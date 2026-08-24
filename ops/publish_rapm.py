@@ -36,6 +36,7 @@ before. Pass ``--publish`` to actually upload.
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import re
 import subprocess
@@ -179,6 +180,30 @@ def augment_season(
     return out.drop("player_key")
 
 
+def check_run_manifest(parquet: Path, frame_rows: int) -> "str | None":
+    """Validate a season's completion manifest. Returns a reason to REFUSE, or None.
+
+    The filename suffix proves a run was DECLARED partial. It cannot prove a run
+    that claimed to be full actually finished -- an interrupted or truncated
+    full run writes the canonical name with fewer teams and is otherwise
+    indistinguishable from a complete season. The manifest closes that gap.
+    """
+    mf = parquet.with_suffix(".manifest.json")
+    if not mf.exists():
+        return f"no completion manifest ({mf.name}); re-run ops/build_rapm.py for this season"
+    try:
+        m = json.loads(mf.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return f"unreadable manifest {mf.name}: {exc}"
+    if m.get("partial"):
+        return f"manifest marks this a PARTIAL run (team={m.get('team')!r} limit={m.get('limit')!r})"
+    avail, done = m.get("games_available"), m.get("games_processed")
+    if isinstance(avail, int) and isinstance(done, int) and avail and done < avail:
+        return f"manifest shows a TRUNCATED run: {done:,}/{avail:,} games processed"
+    if isinstance(m.get("rows"), int) and m["rows"] != frame_rows:
+        return f"manifest rows={m['rows']:,} but the parquet holds {frame_rows:,} -- file changed after the run"
+    return None
+
 def fetch_rosters(league: str, dest: Path, seasons: "set[int] | None" = None) -> Path:
     """Ensure EVERY required roster season is present, not merely one.
 
@@ -229,6 +254,14 @@ def main() -> int:
     )
     ap.add_argument(
         "--publish", action="store_true", help="actually upload (default: dry run)"
+    )
+    ap.add_argument(
+        "--allow-unmanifested",
+        action="store_true",
+        help="Publish seasons that have NO completion manifest. For the "
+        "pre-manifest corpus only -- it WAIVES the completeness proof, it does "
+        "not supply one. Never silences a manifest that says PARTIAL or "
+        "TRUNCATED.",
     )
     a = ap.parse_args()
     # `rate < float("nan")` is False, so a NaN floor would wave through a zero
@@ -323,6 +356,18 @@ def main() -> int:
             "player_id dtype disagreement"
         )
         aug = aug.join(bridge, on=["season", "team", "player_id"], how="left")
+        reason = check_run_manifest(f, pl.read_parquet(f).height)
+        # The escape hatch covers ONLY a missing manifest (the pre-manifest
+        # corpus). A manifest that exists and says PARTIAL or TRUNCATED is
+        # positive evidence of incompleteness and is never waivable.
+        if reason and a.allow_unmanifested and reason.startswith("no completion manifest"):
+            print(f"  {season}: WARNING -- unmanifested, publishing anyway (--allow-unmanifested)", file=sys.stderr)
+            reason = None
+        if reason:
+            if a.publish:
+                print(f"ERROR: {season}: {reason}. Refusing to publish.", file=sys.stderr)
+                return 2
+            print(f"  {season}: WOULD REFUSE -- {reason}", file=sys.stderr)
         n = aug.height
         h = int(aug["player_id"].is_not_null().sum())
         tot += n
