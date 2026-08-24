@@ -261,3 +261,68 @@ strings yields false positives from entity/whitespace noise.
 **Not yet a published dataset** -- it is a committed artifact consumed by the
 sdv-py RAPM identity layer. Registering it in `config.REGISTRY` (and so on a
 release tag) is a separate decision.
+
+## RAPM (`ops/build_rapm.py`)
+
+Feeds the hoop-explorer RAPM engine (`sportsdataverse.mbb.mbb_rapm`) from the
+raw HTML. The engine consumes ES-derived lineup buckets -- 257 keys each --
+which **no published dataset carries** (`possessions` is 56 flat columns,
+`lineups` 77), so the buckets come from the chain that produces them:
+
+```text
+get_box_lineup -> create_lineup_data -> lineup_stats_buckets
+  -> lineup_to_team_report -> build_player_context
+  -> calc_player_weights / calc_lineup_outputs / slow_regression -> calculate_rapm
+```
+
+The call sequence is copied from sdv-py's committed end-to-end test, so the
+bucket shape is right by construction rather than inferred.
+
+```sh
+uv run python ops/build_rapm.py --league wbb --season 2024 --workers 8
+```
+
+### Publishing it (`ops/publish_rapm.py`)
+
+Stage 3. `build_rapm.py` emits a frame keyed on team plus a DISPLAY name; the
+publisher attaches `season` / `team_id` / `player_id` / `person_id` and uploads
+the `ncaa_wbb_rapm_within_team` release dataset via `sportsdataverse.release`.
+
+```sh
+# dry run (default) -- runs the full join and enforces the floor, uploads nothing
+uv run python ops/publish_rapm.py --league wbb --rapm-dir ops/out
+
+# publish
+uv run python ops/publish_rapm.py --league wbb --rapm-dir ops/out --publish
+```
+
+**The estimand is WITHIN-TEAM**, not league-wide -- the tag name says so, and
+`ncaa_wbb_rapm` stays free for a future league-wide (Path B) dataset.
+
+Publishing is gated: a 99% id match-rate FLOOR that `--min-match-rate` may raise
+but never lower, and a hard refusal when the name-change crosswalk is missing
+(without it a renamed player silently becomes two `person_id`s and the match
+rate cannot detect it). Ambiguity is nulled, never guessed.
+
+Note `sportsdataverse_save` uploads but never CREATES a release -- the tag must
+exist first (`gh release create`).
+
+~0.51 s/game single-threaded; 8 workers does a season in ~9 min.
+
+**D-I scoping is on by default and is not cosmetic.** Rating every team that
+appears on the floor wrecks the distribution, because non-D-I exhibition
+opponents play one or two tracked games each:
+
+| scope | n | mean | sd | max abs |
+| --- | --- | --- | --- | --- |
+| all teams | 5,836 | -1.85 | 5.07 | 33.3 |
+| **D-I only** | **4,081** | **-0.16** | **2.18** | **9.4** |
+| non-D-I | 1,755 | -6.08 | 6.98 | 33.3 |
+
+D-I alone centres at ~0 with sd 2.18 -- the shape RAPM should have -- and the
+leaderboard resolves to real elite players (Brink, Cardoso, Fulwiley, Ejim).
+`--all-teams` disables the scope.
+
+**This engine's RAPM is WITHIN-TEAM**: it apportions one team's performance
+across its own players, a different estimand from league-wide RAPM. Provisional
+-- not yet oracle-gated against Torvik/KenPom, and not published.
