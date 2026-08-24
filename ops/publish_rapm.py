@@ -283,12 +283,19 @@ def main() -> int:
     )
     nc = next((c for c in nc_candidates if c.exists()), nc_candidates[-1])
     if not nc.exists():
-        print(
-            f"WARNING: no name-change crosswalk found (looked in "
-            f"{[str(c) for c in nc_candidates]}). person_id will treat a renamed "
-            f"player as two people.",
-            file=sys.stderr,
+        # Without the crosswalk a renamed player becomes TWO person_ids, and
+        # the id match-rate floor cannot see it -- every row still matches a
+        # roster entry, so the release looks healthy while cross-season
+        # identity is silently wrong. A dry run may proceed; publishing may not.
+        msg = (
+            f"no name-change crosswalk found (looked in "
+            f"{[str(c) for c in nc_candidates]}); person_id would treat a "
+            f"renamed player as two people"
         )
+        if a.publish:
+            print(f"ERROR: {msg}. Refusing to publish. Pass --name-changes.", file=sys.stderr)
+            return 2
+        print(f"WARNING: {msg}.", file=sys.stderr)
     keys = build_person_keys(
         all_ros, name_changes=pl.read_parquet(nc) if nc.exists() else None
     )
