@@ -379,7 +379,23 @@ record), and enforces a median gated-Spearman >= 0.95 across the publish set.
 
 | workflow | schedule | last run |
 |---|---|---|
-| [![orphan_scripts.yml](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/orphan_scripts.yml/badge.svg)](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/orphan_scripts.yml) | on push / PR / dispatch | 2026-08-24 |
+| [![orphan_scripts.yml](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/orphan_scripts.yml/badge.svg)](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/orphan_scripts.yml) | on push / PR / dispatch | 2026-08-28 |
 | [![tests.yml](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/tests.yml/badge.svg)](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/tests.yml) | on push / PR / dispatch | 2026-08-24 |
+
+| release tag | assets | size | last publish |
+|---|---:|---:|---|
+| [`ncaa_wbb_lineups`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_lineups) | 51 | 777.8 MB | 2026-08-20 |
+| [`ncaa_wbb_matchup_stints`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_matchup_stints) | 51 | 467.5 MB | 2026-08-20 |
+| [`ncaa_wbb_pbp`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_pbp) | 51 | 3,222.3 MB | 2026-08-18 |
+| [`ncaa_wbb_player_box`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_player_box) | 51 | 418.6 MB | 2026-08-18 |
+| [`ncaa_wbb_possessions`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_possessions) | 51 | 732.2 MB | 2026-08-18 |
+| [`ncaa_wbb_rapm`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_rapm) | 52 | 10.6 MB | 2026-08-24 |
+| [`ncaa_wbb_rapm_within_team`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_rapm_within_team) | 55 | 9.4 MB | 2026-08-24 |
+| [`ncaa_wbb_rosters`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_rosters) | 51 | 3.1 MB | 2026-08-18 |
+| [`ncaa_wbb_schedule`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_schedule) | 51 | 2.9 MB | 2026-08-18 |
+| [`ncaa_wbb_shots`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_shots) | 24 | 198.1 MB | 2026-08-20 |
+| [`ncaa_wbb_team_box`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_team_box) | 51 | 63.8 MB | 2026-08-18 |
+| [`ncaa_wbb_team_ids`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_team_ids) | 51 | 0.2 MB | 2026-08-18 |
+| [`ncaa_wbb_team_rosters`](https://github.com/sportsdataverse/sportsdataverse-data/releases/tag/ncaa_wbb_team_rosters) | 51 | 8.6 MB | 2026-08-18 |
 
 <!-- END GENERATED: status -->
