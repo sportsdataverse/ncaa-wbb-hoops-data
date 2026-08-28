@@ -372,3 +372,14 @@ women's oracle and publish via the explicit `UNGATED_SEASONS` allowlist
 publisher refuses any season whose manifest is missing, gate-failed, or
 inconsistent with the parquet (`check_run_manifest` + the league-gate
 record), and enforces a median gated-Spearman >= 0.95 across the publish set.
+
+## Automation & status
+
+<!-- BEGIN GENERATED: status -->
+
+| workflow | schedule | last run |
+|---|---|---|
+| [![orphan_scripts.yml](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/orphan_scripts.yml/badge.svg)](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/orphan_scripts.yml) | on push / PR / dispatch | 2026-08-24 |
+| [![tests.yml](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/tests.yml/badge.svg)](https://github.com/sportsdataverse/ncaa-wbb-hoops-data/actions/workflows/tests.yml) | on push / PR / dispatch | 2026-08-24 |
+
+<!-- END GENERATED: status -->
