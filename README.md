@@ -467,6 +467,16 @@ publisher refuses any season whose manifest is missing, gate-failed, or
 inconsistent with the parquet (`check_run_manifest` + the league-gate
 record), and enforces a median gated-Spearman >= 0.95 across the publish set.
 
+## Reports & explainers
+
+<!-- BEGIN GENERATED: reports -->
+
+| Report | What it is | Last updated |
+|---|---|---|
+| _none yet_ | — | — |
+
+<!-- END GENERATED: reports -->
+
 ## Automation & status
 
 <!-- BEGIN GENERATED: status -->
