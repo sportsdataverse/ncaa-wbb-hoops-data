@@ -1,0 +1,164 @@
+{
+  "model": "ncaa_wbb_rapm (league-wide, Path B)",
+  "generated": "2026-09-01T15:34:40+00:00",
+  "sweep": "local --all run of python/ncaa_wbb_model_01_rapm_league.py",
+  "lambda": 1000.0,
+  "seasons": [
+    {
+      "season": 2011,
+      "usable": 80.32,
+      "players": 4237,
+      "mu": 88.23,
+      "hca": 2.716,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2012,
+      "usable": 79.64,
+      "players": 4234,
+      "mu": 87.42,
+      "hca": 2.617,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2013,
+      "usable": 76.09,
+      "players": 4223,
+      "mu": 87.31,
+      "hca": 2.692,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2014,
+      "usable": 77.67,
+      "players": 4225,
+      "mu": 92.23,
+      "hca": 2.447,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2015,
+      "usable": 76.23,
+      "players": 4304,
+      "mu": 89.77,
+      "hca": 2.533,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2016,
+      "usable": 77.62,
+      "players": 4308,
+      "mu": 89.82,
+      "hca": 2.594,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2017,
+      "usable": 76.9,
+      "players": 4307,
+      "mu": 90.8,
+      "hca": 2.613,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2018,
+      "usable": 77.6,
+      "players": 4260,
+      "mu": 91.68,
+      "hca": 2.259,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2019,
+      "usable": 84.55,
+      "players": 4404,
+      "mu": 91.03,
+      "hca": 2.386,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2020,
+      "usable": 87.36,
+      "players": 4344,
+      "mu": 90.45,
+      "hca": 2.29,
+      "rho": null,
+      "n": null
+    },
+    {
+      "season": 2021,
+      "usable": 86.78,
+      "players": 4304,
+      "mu": 91.67,
+      "hca": 1.839,
+      "rho": 0.9039,
+      "n": 326
+    },
+    {
+      "season": 2022,
+      "usable": 86.45,
+      "players": 4666,
+      "mu": 90.53,
+      "hca": 2.142,
+      "rho": 0.9723,
+      "n": 339
+    },
+    {
+      "season": 2023,
+      "usable": 89.39,
+      "players": 4606,
+      "mu": 91.38,
+      "hca": 2.234,
+      "rho": 0.9841,
+      "n": 347
+    },
+    {
+      "season": 2024,
+      "usable": 87.49,
+      "players": 4557,
+      "mu": 91.72,
+      "hca": 2.307,
+      "rho": 0.9864,
+      "n": 346
+    },
+    {
+      "season": 2025,
+      "usable": 88.1,
+      "players": 4623,
+      "mu": 91.91,
+      "hca": 2.402,
+      "rho": 0.98,
+      "n": 349
+    },
+    {
+      "season": 2026,
+      "usable": 89.96,
+      "players": 4596,
+      "mu": 91.69,
+      "hca": 2.41,
+      "rho": 0.9823,
+      "n": 349
+    }
+  ],
+  "gates": {
+    "usable_fraction_floor": 0.65,
+    "intercept_band": [
+      83,
+      98
+    ],
+    "hca_band": [
+      1.0,
+      4.0
+    ],
+    "torvik_spearman_floor": 0.89
+  }
+}
