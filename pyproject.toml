@@ -16,7 +16,11 @@ dependencies = [
 ncaa-wbb-data-build = "ncaa_wbb_data_build.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.5"]
+dev = [
+    "pytest>=8",
+    "pyyaml>=6.0.3",
+    "ruff>=0.5",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,84 @@
+# NCAA WBB RAPM Models — wires the previously-unwired league-wide retrain.
+#
+# ops/build_rapm_league.py resolves its input trees as
+# <workspace>/wehoop-dev/ncaa-wbb-hoops-data/wbb/... — hence the checkout
+# `path:` below mirrors the local sibling layout. Gates run INSIDE the build
+# (publish-blocking; a failed season writes nothing; floors frozen 2026-08-24,
+# raisable only). Publishing (ops/publish_rapm_league.py) stays a manual step:
+# this job uploads the built per-season parquet + ledger as a run artifact.
+#
+# Within-team RAPM (stage 02) is deliberately NOT here — it needs the raw NCAA
+# HTML bundle checkout, which is not runner-friendly (see models/manifest.yaml).
+
+name: NCAA WBB RAPM Models
+
+on:
+  workflow_dispatch:
+    inputs:
+      season:
+        description: 'Single season end-year (e.g. 2026); empty = --all (2011-2026)'
+        required: false
+        default: ''
+  schedule:
+    # 06:00 UTC 20 April — post-tournament, season settled. Annual.
+    - cron: '0 6 20 4 *'
+
+concurrency:
+  group: ncaa-wbb-models
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rapm_league:
+    name: League-wide RAPM (build + gates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Checkout (sparse, sibling-layout path)
+        uses: actions/checkout@v5
+        with:
+          path: wehoop-dev/ncaa-wbb-hoops-data
+          persist-credentials: false
+          sparse-checkout: |
+            python
+            ops
+            models
+            wbb/possessions
+            wbb/team_rosters
+            wbb/name_changes
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Sync deps
+        working-directory: wehoop-dev/ncaa-wbb-hoops-data
+        run: uv sync --frozen
+
+      - name: Build + gate league-wide RAPM
+        working-directory: wehoop-dev/ncaa-wbb-hoops-data
+        env:
+          # env-passed, never ${{ }}-inline in the script body
+          SEASON: ${{ inputs.season }}
+        run: |
+          ARGS="--all"
+          if [ -n "${SEASON}" ]; then ARGS="--season ${SEASON}"; fi
+          uv run --no-sync python python/ncaa_wbb_model_01_rapm_league.py ${ARGS}
+
+      - name: Upload built seasons + ledger (publish stays manual)
+        uses: actions/upload-artifact@v7
+        with:
+          name: ncaa-wbb-rapm-league
+          path: |
+            wehoop-dev/ncaa-wbb-hoops-data/ops/out_league/**
+            wehoop-dev/ncaa-wbb-hoops-data/models/ledger.jsonl
+          if-no-files-found: warn
+          retention-days: 30

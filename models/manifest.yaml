@@ -1,0 +1,37 @@
+# Model stage manifest — single home for the model/stage list (Track C step 2).
+# One estimand = one numbered pipeline, flat in python/ beside the numbered
+# data stages; run subsets with scripts/ncaa_wbb_models.sh.
+# tests/test_model_manifest.py keeps this file, the stage scripts, and
+# models/REGISTRY.md in lockstep (file-based — ops/ is deliberately not an
+# importable package).
+#
+# Honest N/As:
+#   - fingerprints: the inputs are this repo's LIVING published trees
+#     (possessions / team_rosters / name_changes update in-season), so a
+#     code+config fingerprint skip would silently skip retrains after data
+#     republish. No skip; every run recomputes.
+#   - step 6 (commit promoted artifacts): the per-season parquet assets live
+#     on the release tags (52/55 assets); nothing fitted is committed here.
+#   - ledger: each stage appends models/ledger.jsonl per run;
+#     in_published_data flips when the publish stage ships the season.
+
+driver: scripts/ncaa_wbb_models.sh
+
+suites:
+  rapm:
+    gate: "publish-blocking gates inside ops/build_rapm_league.py / build_rapm.py; floors frozen from the 2026-08-24 sweep, --min-spearman may only RAISE"
+    models:
+      rapm_league:
+        stage: python/ncaa_wbb_model_01_rapm_league.py
+        wraps: ops/build_rapm_league.py
+        publish: ops/publish_rapm_league.py
+        release_tag: ncaa_wbb_rapm
+        estimand: league-wide
+        retrain_ci: .github/workflows/ncaa_wbb_models.yml
+      rapm_within_team:
+        stage: python/ncaa_wbb_model_02_rapm_within_team.py
+        wraps: ops/build_rapm.py
+        publish: ops/publish_rapm.py
+        release_tag: ncaa_wbb_rapm_within_team
+        estimand: within-team
+        retrain_ci: null  # manual by design — needs the raw NCAA HTML bundle checkout, not runner-friendly
