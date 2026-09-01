@@ -21,6 +21,13 @@ dev = [
     "pyyaml>=6.0.3",
     "ruff>=0.5",
 ]
+docs = [
+    "great-tables>=0.21.0",
+    "ipykernel>=6.31.0",
+    "nbclient>=0.10.2",
+    "nbformat>=5.10.4",
+    "plotnine>=0.13.6",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
