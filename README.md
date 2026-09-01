@@ -474,7 +474,7 @@ record), and enforces a median gated-Spearman >= 0.95 across the publish set.
 | Report | What it is | Last updated |
 |---|---|---|
 | [Model registry](models/REGISTRY.md) | model | artifact | gates | retrain, one row per published model | 2026-09-01 |
-| [Model reports & cards](docs/models/) | 1 files, one per item | uncommitted |
+| [Model reports & cards](docs/models/) | 1 files, one per item | 2026-09-01 |
 
 <!-- END GENERATED: reports -->
 
