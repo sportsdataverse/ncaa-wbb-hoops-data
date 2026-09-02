@@ -1,12 +1,16 @@
 {
   "model": "ncaa_wbb_rapm (league-wide, Path B)",
-  "generated": "2026-09-02T04:38:51+00:00",
+  "generated": "2026-09-02T19:26:13+00:00",
   "sweep": "local --all run of python/ncaa_wbb_model_01_rapm_league.py",
   "lambda": 1000.0,
   "se": "posterior sqrt(sigma2 * diag((X'WX + lambda I)^-1)) published; sampling sqrt(diag(sigma2 * (M - lambda M^2))) drives the split-half gate",
   "seasons": [
     {
       "season": 2011,
+      "estimator": "flat",
+      "pool_seasons": [
+        2011
+      ],
       "usable": 80.32,
       "players": 4237,
       "mu": 88.23,
@@ -25,6 +29,10 @@
     },
     {
       "season": 2012,
+      "estimator": "flat",
+      "pool_seasons": [
+        2012
+      ],
       "usable": 79.64,
       "players": 4234,
       "mu": 87.42,
@@ -43,6 +51,10 @@
     },
     {
       "season": 2013,
+      "estimator": "flat",
+      "pool_seasons": [
+        2013
+      ],
       "usable": 76.09,
       "players": 4223,
       "mu": 87.31,
@@ -61,6 +73,10 @@
     },
     {
       "season": 2014,
+      "estimator": "flat",
+      "pool_seasons": [
+        2014
+      ],
       "usable": 77.67,
       "players": 4225,
       "mu": 92.23,
@@ -79,6 +95,10 @@
     },
     {
       "season": 2015,
+      "estimator": "flat",
+      "pool_seasons": [
+        2015
+      ],
       "usable": 76.23,
       "players": 4304,
       "mu": 89.77,
@@ -97,6 +117,10 @@
     },
     {
       "season": 2016,
+      "estimator": "flat",
+      "pool_seasons": [
+        2016
+      ],
       "usable": 77.62,
       "players": 4308,
       "mu": 89.82,
@@ -115,6 +139,10 @@
     },
     {
       "season": 2017,
+      "estimator": "flat",
+      "pool_seasons": [
+        2017
+      ],
       "usable": 76.9,
       "players": 4307,
       "mu": 90.8,
@@ -133,6 +161,10 @@
     },
     {
       "season": 2018,
+      "estimator": "flat",
+      "pool_seasons": [
+        2018
+      ],
       "usable": 77.6,
       "players": 4260,
       "mu": 91.68,
@@ -151,6 +183,10 @@
     },
     {
       "season": 2019,
+      "estimator": "flat",
+      "pool_seasons": [
+        2019
+      ],
       "usable": 84.55,
       "players": 4404,
       "mu": 91.03,
@@ -169,6 +205,10 @@
     },
     {
       "season": 2020,
+      "estimator": "flat",
+      "pool_seasons": [
+        2020
+      ],
       "usable": 87.36,
       "players": 4344,
       "mu": 90.45,
@@ -187,6 +227,10 @@
     },
     {
       "season": 2021,
+      "estimator": "flat",
+      "pool_seasons": [
+        2021
+      ],
       "usable": 86.78,
       "players": 4304,
       "mu": 91.67,
@@ -205,6 +249,10 @@
     },
     {
       "season": 2022,
+      "estimator": "flat",
+      "pool_seasons": [
+        2022
+      ],
       "usable": 86.45,
       "players": 4666,
       "mu": 90.53,
@@ -223,6 +271,10 @@
     },
     {
       "season": 2023,
+      "estimator": "flat",
+      "pool_seasons": [
+        2023
+      ],
       "usable": 89.39,
       "players": 4606,
       "mu": 91.38,
@@ -241,6 +293,10 @@
     },
     {
       "season": 2024,
+      "estimator": "flat",
+      "pool_seasons": [
+        2024
+      ],
       "usable": 87.49,
       "players": 4557,
       "mu": 91.72,
@@ -259,6 +315,10 @@
     },
     {
       "season": 2025,
+      "estimator": "flat",
+      "pool_seasons": [
+        2025
+      ],
       "usable": 88.1,
       "players": 4623,
       "mu": 91.91,
@@ -277,6 +337,10 @@
     },
     {
       "season": 2026,
+      "estimator": "flat",
+      "pool_seasons": [
+        2026
+      ],
       "usable": 89.96,
       "players": 4596,
       "mu": 91.69,

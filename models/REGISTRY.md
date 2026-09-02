@@ -8,7 +8,7 @@ only RAISE them. `tests/test_model_registry.py` keeps this table in lockstep.
 
 | model | artifact(s) | release tag | training data | fitting script | gates at publish | last retrain | cadence |
 |---|---|---|---|---|---|---|---|
-| League-wide RAPM (Path B — `estimand` = every D-I player on one scale) | per-season parquet, **52 assets**; additive columns `orapm_se` / `drapm_se` / `rapm_net_se` (ridge-posterior SEs, 2026-09-01) | `ncaa_wbb_rapm` | this repo's published `possessions` + `team_rosters` + `name_changes` trees, 2011–2026 (2010 excluded by gate 1, not by a season list) | `ops/build_rapm_league.py` (stages 1–2) → `ops/publish_rapm_league.py` (stage 3) | publish-blocking, a failed season writes NOTHING: usable-possession ≥ **0.65** (obs 2011+ min 0.7609); intercept era band **[83, 98]** (obs 87.31–92.80) + hca **[1.0, 4.0]** — scale-bug catchers Spearman can't see; Torvik external: ≥ 250 joined teams AND Spearman(team_net, adjem) ≥ **0.89** (obs min 0.9039, the 2021 COVID season); **WBB 2011–2020 are `UNGATED_SEASONS`** (Torvik has no women's ratings pre-2021) — still under gates 1–2, marked `external_gate="ungated_no_oracle"` in the manifest; **SE gate (2026-09-01)**: σ̂² era band **[10000, 14000]** (obs 11,634–12,408), Spearman(poss, rapm_net_se) ≤ **−0.80** (obs −0.950 to −0.872), top-decile median SE < bottom-decile, split-half (odd/even games) coverage ≥ **0.95** under the posterior SE (obs ≥ 0.9995) and in **[0.92, 0.98]** under the sampling SE for O/D/net (obs 0.9397–0.9563, nominal 0.954) | 2026-09-01 (SE columns; coefficients unchanged) | annual cron + dispatch (`.github/workflows/ncaa_wbb_models.yml`) via `python/ncaa_wbb_model_01_rapm_league.py` |
+| League-wide RAPM (Path B — `estimand` = every D-I player on one scale) | per-season parquet, **52 assets**; additive columns `orapm_se` / `drapm_se` / `rapm_net_se` (ridge-posterior SEs, 2026-09-01); **estimator (2026-09-02)** = the **flat single-season ridge** — pooling is measured and better on point estimates but fails gate 5(b) here (see below), so this league is NOT in `POOLED_LEAGUES` | `ncaa_wbb_rapm` | this repo's published `possessions` + `team_rosters` + `name_changes` trees, 2011–2026 (2010 excluded by gate 1, not by a season list) | `ops/build_rapm_league.py` (stages 1–2) → `ops/publish_rapm_league.py` (stage 3) | publish-blocking, a failed season writes NOTHING: usable-possession ≥ **0.65** (obs 2011+ min 0.7609); intercept era band **[83, 98]** (obs 87.31–92.80) + hca **[1.0, 4.0]** — scale-bug catchers Spearman can't see; Torvik external: ≥ 250 joined teams AND Spearman(team_net, adjem) ≥ **0.89** (obs min 0.9039, the 2021 COVID season); **WBB 2011–2020 are `UNGATED_SEASONS`** (Torvik has no women's ratings pre-2021) — still under gates 1–2, marked `external_gate="ungated_no_oracle"` in the manifest; **SE gate (2026-09-01)**: σ̂² era band **[10000, 14000]** (obs 11,634–12,408), with the pooled band **[10000, 14000]** re-derived from the 14-season 2026-09-02 pooled sweep (obs 11,742.7 in 2013 – 12,400.3 in 2026) but unused here, Spearman(poss, rapm_net_se) ≤ **−0.80** (obs −0.950 to −0.872), top-decile median SE < bottom-decile, split-half (odd/even games) coverage ≥ **0.95** under the posterior SE (obs ≥ 0.9995) and in **[0.92, 0.98]** under the sampling SE for O/D/net (obs 0.9397–0.9563, nominal 0.954) | 2026-09-01 (SE columns; coefficients unchanged) | annual cron + dispatch (`.github/workflows/ncaa_wbb_models.yml`) via `python/ncaa_wbb_model_01_rapm_league.py` |
 | Within-team RAPM (Path A — apportions one team's performance across its players) | per-season parquet, **55 assets** | `ncaa_wbb_rapm_within_team` | raw NCAA HTML bundles via the sdv-py hoop-explorer engine (`wbb_rapm.build_player_context` + ridge), ES lineup buckets rebuilt from the parse chain | `ops/build_rapm.py` → `ops/publish_rapm.py` | shape proven by the committed e2e lineup-aggregation test in sdv-py; **different estimand** from league-wide — `estimand` column stamped into every row; no Torvik gate (not comparable) | 2026-08-24 | manual by design via `python/ncaa_wbb_model_02_rapm_within_team.py` — needs the raw NCAA HTML bundle checkout, not runner-friendly |
 
 Notes:
@@ -38,44 +38,40 @@ Notes:
 - WBB is HALVES before season 2016 (the quarters model silently empties those
   seasons) — inherited by everything downstream of `possessions`.
 
-## Evaluated, NOT adopted: RAPM stabilization levers (2026-09-02, PR #19)
+## Evaluated, NOT adopted here: multi-year pooling and the SPM prior (2026-09-02)
 
-Two levers were measured against the shipped flat-ridge baseline over ten held-out seasons
-(2016–2025), hyperparameters frozen on 2014–2015, ~25% of games held out per season by
-`contest_id % 4 == 0`. Harness: `ops/experiments/rapm_stabilization.py` (re-runnable);
-decision rule applied in code by `ops/experiments/summarize_rapm_stabilization.py`; full
-design and tables in the ClaudeCowork ledger
-`2026-09-01-writeup-improvements/reports/rapm-stabilization.md`. Engine support (default-off)
-is `sportsdataverse-py#436`.
+Both levers measured better than the flat baseline on point estimates (PR #19: pooling
+0.280 pts/game of out-of-sample margin error, the SPM prior 0.239, better in 10/10
+seasons with CIs excluding zero). MBB turned pooling on; **WBB has not**, and neither
+lever is adopted here. Two frozen publish gates say so:
 
-| lever | out-of-sample game-margin MAE gain (12,398 held-out games) | seasons better | status |
-|---|---|---|---|
-| multi-year (stacked, `decay = 0.75`) | **0.280** pts/game, pooled game-cluster bootstrap 95% CI excludes 0 | 10/10 | measured, NOT the producer default |
-| SPM prior (`prior_mean=`, exposure shrink `k = 0`) | **0.239** pts/game, CI excludes 0 | 10/10 | measured, NOT the producer default |
-| both together | **0.442** pts/game, CI excludes 0 | 10/10 | measured, NOT the producer default |
+1. **Pooling fails gate 5(b)** — Spearman(possessions, `rapm_net_se`) ≤ **−0.80**. A
+   14-season `--all --survey` sweep of the pooled estimator measures
+   **−0.7947 (2021)** and **−0.7953 (2024)**, with 2020 / 2025 / 2026 at −0.804 / −0.810
+   / −0.806; the whole pooled range is −0.7947…−0.8507 against a flat −0.872…−0.950. At
+   WBB's frozen `decay = 0.75` a player's SE is driven mostly by his three-season
+   exposure while the published `off_poss` / `def_poss` are the season's, so the
+   correlation the gate measures genuinely weakens. Lowering the ceiling would be the
+   widening the rules forbid; re-tuning WBB's decay to MBB's 0.5 would be re-tuning a
+   hyperparameter frozen on the development seasons in order to pass a gate. Re-pairing
+   the gate against the *pooled* exposure is arguably the estimator-consistent test but
+   cannot be told apart from changing the test until it passes, so it is recorded, not
+   done. MBB is unaffected (pooled −0.8611…−0.9108).
+2. **The SPM prior fails gate 5(d)** — the sampling-SE split-half calibration, band
+   [0.92, 0.98]. `solve_rapm_league` treats the prior mean `b0` as a fixed constant, so
+   the published SE describes `beta − b0` only while `b0` is itself estimated from the
+   season's box scores; measured on MBB (`ops/experiments/rapm_se_calibration.py`) the
+   coverage drops to 0.798–0.914 with z-sd 1.39–1.53 against a nominal 1.0, i.e. ~35%
+   too-narrow intervals. Same conclusion for both leagues.
 
-**Why not adopted.** Both beat the baseline on the pre-registered criteria and hold the Torvik
-floor, but flipping the producer's estimator republishes 52 live assets and first needs:
+The pooled σ̂² band was still derived, so it is on record if WBB ever qualifies:
+14-season sweep **11,742.7 (2013) … 12,400.3 (2026)** → **[10000, 14000]** by the
+±12.5%-and-round-outward rule that reproduces the flat band exactly from its own
+extremes. The band is NOT the blocker; gate 5(b) is.
 
-1. **A re-derived `σ̂²` gate band.** Gate 5(a) bounds `σ̂²` to `[10000, 14000]`; a decayed-weight pooled
-   fit measures **7,733** against the single-season **13,212** (measured on the MBB twin at decay 0.5; WBB needs its own sweep before its band is set).
-   That is not a bug — under decay weights `σ̂²` is a weighted residual variance on a different
-   weight scale, i.e. a DIFFERENT quantity — but the band must be re-derived from its own full
-   sweep. It must **not** be widened to let the change through.
-2. **A season-`t` filter on the published frame.** A pooled fit rates — persons across three
-   seasons where the single-season fit rates —; without the filter, and without reporting
-   season-`t` exposure, `off_poss` / `def_poss` silently become three-season sums.
-
-**Finding worth keeping:** the multi-year gain is **not** concentrated below ~200 possessions,
-which is what the original backlog item assumed. The absolute next-season-Spearman gain is flat
-across playing time, so there is no possession threshold above which it stops helping — it is a
-uniform variance reduction, not a tail stabiliser. The SPM prior *does* have a threshold, at
-roughly **100 possessions**: it is worth +0.03…+0.06 Spearman above it and nothing below, because
-under ~100 possessions a player's box *rates* are themselves noise.
-
-**Not a blocker (measured, contrary to the 2026-09-01 design note):** the SE path survives pooling
-— the 3-season design is dim 17,267 and `compute_se=True` completes in 24.4 s (vs 6.4 s
-single-season). The engine's documented ~20k ceiling binds at a 4–5 season window.
+This repo therefore publishes exactly what it published before — the flat single-season
+ridge, through the pre-2026-09-02 code path — and `ops/build_rapm_league.py` carries the
+pooled machinery, the leakage test and the recorded measurements.
 
 ## Operability (Track C steps 2–6)
 
