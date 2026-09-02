@@ -192,6 +192,15 @@ def run_season(
     bridge: pl.DataFrame,
     min_spearman: float,
 ) -> bool:
+    # Drop any prior manifest BEFORE the first gate can return: a gate failure
+    # (or an interruption) must leave NO manifest, so the publisher refuses the
+    # season. Otherwise a manifest from an earlier PASSING run outlives the new
+    # failure and republishes stale numbers beside a stale parquet.
+    stem = _DATA[league][2]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    f = out_dir / f"{stem}_rapm_league_{season}.parquet"
+    mf_path = f.with_suffix(".manifest.json")
+    mf_path.unlink(missing_ok=True)
     poss_f = _data_file(league, "possessions", season)
     ros_f = _data_file(league, "team_rosters", season)
     if not poss_f.is_file() or not ros_f.is_file():
@@ -324,14 +333,6 @@ def run_season(
     )
     n_games = int(possessions["contest_id"].n_unique())
 
-    stem = _DATA[league][2]
-    out_dir.mkdir(parents=True, exist_ok=True)
-    f = out_dir / f"{stem}_rapm_league_{season}.parquet"
-    # Remove any prior manifest BEFORE the parquet changes -- an interruption
-    # between the two writes must leave NO manifest (-> refused), never a
-    # stale manifest beside a new parquet.
-    mf_path = f.with_suffix(".manifest.json")
-    mf_path.unlink(missing_ok=True)
     out.write_parquet(f)
     manifest = {
         "league": league,
