@@ -5,15 +5,21 @@ become "season ``t``'s rating, with hindsight". Two properties have to hold, and
 prose in a docstring is not evidence of either:
 
 1. **No season after ``t`` reaches the fit for ``t``** -- proved by instrumenting
-   every input read of a REAL season and checking the season set, not by reading
-   the code.
+   every input read of a REAL season across a whole ``run_season`` and checking
+   the season set, not by reading the code.
 2. **The published season-``t`` frame is season ``t``'s** -- a pooled fit rates
    everyone in the window on window-length exposure, so the per-season asset must
    be cut back to season-``t`` participants carrying season-``t`` possessions.
 
 Test 1 touches this repo's real published trees and is skipped when they are not
-checked out. Test 2 is exact on synthetic frames, where "this player played only
-in the previous season" can be stated unambiguously.
+checked out; it runs a full survey-mode fit, so it costs a few minutes on a
+pooled season. Test 2 is exact on synthetic frames, where "this player played
+only in the previous season" can be stated unambiguously.
+
+The whole module is skipped when the installed ``sportsdataverse`` predates the
+pooled-estimator helpers: the producer imports them at module scope, so without
+them there is nothing here to test and a collection error would say so far less
+clearly.
 """
 
 from __future__ import annotations
@@ -40,7 +46,15 @@ def _load_build():
     return mod
 
 
-bl = _load_build()
+try:
+    bl = _load_build()
+except ImportError as exc:  # pragma: no cover - environment-dependent
+    pytest.skip(
+        f"the pooled estimator needs a newer sportsdataverse ({exc}); re-lock with "
+        "`uv lock --upgrade-package sportsdataverse` once sportsdataverse-py#441 "
+        "is on main",
+        allow_module_level=True,
+    )
 
 LEAGUE = "mbb" if (ROOT / "mbb").is_dir() else "wbb"
 TARGET = 2019
@@ -50,14 +64,19 @@ _HAVE_DATA = bl._data_file(LEAGUE, "possessions", TARGET + 1).is_file()
 @pytest.mark.skipif(
     not _HAVE_DATA, reason="needs this repo's published trees checked out"
 )
-def test_no_season_after_the_target_is_ever_read(monkeypatch):
-    """Instrument EVERY input read of a real season and check the season set.
+def test_no_season_after_the_target_is_ever_read(monkeypatch, tmp_path):
+    """Instrument EVERY input read of a real ``run_season`` and check the season set.
 
     ``_data_file`` is the single door to every input this pipeline has
     (possessions, team_rosters, player_box, name_changes), so recording its
     season argument records everything the fit could possibly have seen. The
     seasons AFTER the target are present on disk -- the assertion is that the
     build does not touch them, not that they are unavailable.
+
+    Survey mode is used so the run computes every gate and writes nothing; it
+    still performs the whole fit, including the split-half refit's per-predecessor
+    re-resolve, which is exactly the read surface a `choose_estimator`-only check
+    would miss.
     """
     seen: set[int] = set()
     real = bl._data_file
@@ -71,12 +90,22 @@ def test_no_season_after_the_target_is_ever_read(monkeypatch):
     bridge = bl.person_bridge(LEAGUE)
     seen.clear()  # the bridge legitimately spans every roster season
     chosen = bl.choose_estimator(LEAGUE, TARGET, bridge, {})
+    passed, _rec = bl.run_season(
+        LEAGUE, TARGET, tmp_path, bridge, bl.SPEARMAN_FLOOR[LEAGUE], {}, survey=True
+    )
+    assert passed, (
+        "the survey run must clear every gate for this assertion to mean anything"
+    )
+    assert not list(tmp_path.iterdir()), "survey mode must write nothing"
+
     future = {s for s in seen if s > TARGET}
     assert not future, f"the fit for {TARGET} read future seasons {sorted(future)}"
     if LEAGUE in bl.POOLED_LEAGUES:
         assert chosen["estimator"] == "pooled"
         assert sorted(chosen["pool"]) == [TARGET - 2, TARGET - 1]
-        assert max(chosen["pool"]) < TARGET
+        assert seen >= {TARGET - 2, TARGET - 1, TARGET}, (
+            "a pooled run must actually read its predecessors"
+        )
     else:
         # A league that does not pool must not even look at a predecessor's
         # possessions -- the leakage claim is then trivially true, and this

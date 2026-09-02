@@ -62,6 +62,7 @@ from build_rapm_league import (  # noqa: E402
     USABLE_FRACTION_FLOOR,
     person_bridge,
     resolve_season,
+    to_person,
 )
 from rapm_stabilization import (  # noqa: E402
     SPM_SHRINK_GRID,
@@ -92,12 +93,19 @@ def main(argv: "list[str] | None" = None) -> int:
     target = resolve_season(lg, season, bridge)
     if target is None:
         raise SystemExit(f"{lg} {season}: inputs missing")
+    # Every frame below is person_id-keyed, exactly as the producer's pooled path
+    # keys them: `resolve_season` hands back the SEASON's player_id, which is a
+    # different namespace each year. Stacking those unconverted would give one
+    # human a fresh column per season -- no pooling at all, silently -- and the
+    # SPM prior, which box_features emits per person_id, would inner-join against
+    # a player_id exposure frame and drop nearly every row.
+    target_res = to_person(target["resolved"], bridge, season)
 
     pool_res = {}
     for s in range(season - MULTI_YEAR_WINDOW + 1, season):
         got = resolve_season(lg, s, bridge)
         if got is not None and got["usable_fraction"] >= USABLE_FRACTION_FLOOR:
-            pool_res[s] = got["resolved"]
+            pool_res[s] = to_person(got["resolved"], bridge, s)
     if len(pool_res) != MULTI_YEAR_WINDOW - 1:
         raise SystemExit(f"{lg} {season}: no full pool -- this season publishes flat")
 
@@ -109,7 +117,10 @@ def main(argv: "list[str] | None" = None) -> int:
         ):
             got = resolve_season(lg, s, bridge)
             if got is not None and got["usable_fraction"] >= USABLE_FRACTION_FLOOR:
-                baselines[s] = _fit(got["stints"])[0]
+                # person-keyed too: fit_spm joins these on person_id
+                baselines[s] = _fit(
+                    aggregate_stints(to_person(got["resolved"], bridge, s))
+                )[0]
     spm = fit_spm(lg, season, bridge, baselines)
 
     def make(use_pool: bool, use_prior: bool):
@@ -157,7 +168,7 @@ def main(argv: "list[str] | None" = None) -> int:
         "pooled_spm": (True, True),
     }.items():
         _pp, s = split_half_se_check(
-            target["resolved"], ridge_lambda=DEFAULT_RIDGE_LAMBDA, refit=make(p, q)
+            target_res, ridge_lambda=DEFAULT_RIDGE_LAMBDA, refit=make(p, q)
         )
         cov = [s[f"coverage_sampling_{c}"] for c in ("orapm", "drapm", "rapm_net")]
         verdict = "PASS" if all(lo <= v <= hi for v in cov) else "FAIL"

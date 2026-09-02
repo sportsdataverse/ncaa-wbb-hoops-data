@@ -147,7 +147,6 @@ from sportsdataverse.mbb.mbb_ncaa_rapm_league import (
     solve_rapm_league,
     split_half_se_check,
     stack_seasons,
-    stint_exposure,
     team_aggregate,
 )
 
@@ -155,7 +154,6 @@ from sportsdataverse.mbb.mbb_ncaa_rapm_league import (
 # runpy.run_path from python/ncaa_{lg}_model_01_rapm_league.py, where it is not
 # on sys.path. Insert it so the sibling ops modules import either way.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from rapm_person import person_to_player, to_person  # noqa: E402
 
 _ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _DATA = {
@@ -174,16 +172,25 @@ INTERCEPT_BAND = {"mbb": (95.0, 112.0), "wbb": (83.0, 98.0)}
 HCA_BAND = (1.0, 4.0)
 MIN_ORACLE_TEAMS = 250
 
+#: The person bridge must cover essentially every on-floor slot, or the pooled
+#: design is silently merging or dropping people and the failure surfaces only
+#: as a wrong rating. Observed on MBB and WBB 2011-2026: 1.000.
+PERSON_BRIDGE_FLOOR = 0.999
+
+#: The ten on-floor slots ``resolve_possessions`` emits.
+SLOT_IDS = [f"{side}_{i}_id" for side in ("home", "away") for i in range(1, 6)]
+
 #: Seasons published WITHOUT the external Torvik gate, because the oracle
 #: does not exist there (Torvik women's coverage starts 2021). Internal
 #: gates (usable fraction, level bands) still apply. Nothing else may skip
 #: the external gate.
 UNGATED_SEASONS = {"mbb": set(), "wbb": set(range(2011, 2021))}
 
-#: Default estimator (2026-09-02): the decayed-weight 3-season pool PLUS the
-#: box-score-plus-minus prior, both measured against the flat single-season
-#: ridge over ten held-out seasons per league before being switched on (see
-#: ``ops/experiments/rapm_stabilization.py`` and the report it points at).
+#: Default estimator (2026-09-02): the decayed-weight 3-season pool, measured
+#: against the flat single-season ridge over ten held-out seasons per league
+#: before being switched on (see ``ops/experiments/rapm_stabilization.py`` and
+#: the report it points at). The box-score-plus-minus prior is NOT applied --
+#: it fails gate 5(d); see :data:`ESTIMATORS` and the module docstring.
 #: Hyperparameters were FROZEN on development seasons 2014-2015 and are not
 #: re-tuned here: the two leagues chose different values on the same grid.
 MULTI_YEAR_WINDOW = 3  # seasons t-2 .. t
@@ -311,10 +318,70 @@ def person_bridge(league: str) -> pl.DataFrame:
     ).unique(subset=["season", "player_id"])
 
 
-def _poss_frame(stints: pl.DataFrame) -> pl.DataFrame:
-    """``player_id`` / ``poss`` -- the exposure shape the SPM prior shrinks on."""
-    return stint_exposure(stints).select(
-        "player_id", (pl.col("off_poss") + pl.col("def_poss")).alias("poss")
+def to_person(
+    resolved: pl.DataFrame, bridge: pl.DataFrame, season: int
+) -> pl.DataFrame:
+    """Replace each on-floor slot's ``player_id`` with its cross-season ``person_id``.
+
+    A multi-season design is only pooling if the same human is the same COLUMN in
+    every season. Applied ONLY on the pooled path -- a flat season has no
+    cross-season column to share, and re-keying it would change published rows
+    for nothing.
+
+    Raises:
+        RuntimeError: bridge coverage below :data:`PERSON_BRIDGE_FLOOR`, or a
+            ``contest_id`` that is not integer-like.
+    """
+    key = bridge.filter(pl.col("season") == season).select("player_id", "person_id")
+    assert key.schema["player_id"] == pl.Utf8, "bridge player_id must be Utf8"
+    out = resolved.select("contest_id", "home", "away", "poss_team", "pts", *SLOT_IDS)
+    for slot in SLOT_IDS:
+        assert out.schema[slot] == pl.Utf8, f"{slot} must be Utf8 to join the bridge"
+        out = (
+            out.join(
+                key.rename({"player_id": slot, "person_id": f"_{slot}"}),
+                on=slot,
+                how="left",
+            )
+            .drop(slot)
+            .rename({f"_{slot}": slot})
+        )
+    filled = pl.sum_horizontal([pl.col(c).is_not_null() for c in SLOT_IDS]).sum()
+    before = resolved.select(filled).item()
+    after = out.select(filled).item()
+    cover = after / before if before else 0.0
+    if cover < PERSON_BRIDGE_FLOOR:
+        raise RuntimeError(
+            f"season {season}: person bridge covers {cover:.4f} of on-floor slots "
+            f"< {PERSON_BRIDGE_FLOOR} -- refusing to pool a mis-identified design"
+        )
+    out = out.select(
+        pl.col("contest_id").cast(pl.Int64, strict=False),
+        "home",
+        "away",
+        "poss_team",
+        "pts",
+        *SLOT_IDS,
+    )
+    if out.get_column("contest_id").null_count():
+        raise RuntimeError(f"season {season}: contest_id is not integer-like")
+    return out
+
+
+def person_to_player(bridge: pl.DataFrame, season: int) -> pl.DataFrame:
+    """``person_id`` -> ONE ``player_id`` for ``season`` (the lowest, deterministically).
+
+    The bridge is many-to-one within a season for the handful of people carrying
+    two ids (a mid-season name change): 1-16 per season on both leagues. A
+    person-keyed fit rates them once, which is correct, so publishing needs a
+    single representative id; ``person_id`` is published beside it, so no
+    identity is lost.
+    """
+    return (
+        bridge.filter(pl.col("season") == season)
+        .select("person_id", "player_id")
+        .sort("person_id", "player_id")
+        .unique(subset=["person_id"], keep="first", maintain_order=True)
     )
 
 
@@ -514,7 +581,7 @@ def run_season(
     from scipy.stats import spearmanr
 
     rec["sigma2"] = info["sigma2"]
-    band = SIGMA2_BAND[(league, estimator)]
+    band = SIGMA2_BAND.get((league, estimator))
     if not survey:
         if band is None:
             _fail(season, f"no sigma2 band is derived for estimator {estimator!r}")
