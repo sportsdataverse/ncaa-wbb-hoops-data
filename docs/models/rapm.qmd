@@ -410,9 +410,10 @@ is a tier, not a ranking.
   zero there (0.0963 → 0.1252 for <200 possessions vs 0.5228 → 0.5374 for 1000+); those are
   different claims and should not be conflated.
   **Not wired into this producer yet, on purpose:** pooling changes what `σ̂²`
-  measures (weighted residual variance under decay weights — measured 7,733 vs
-  the single-season 13,212 against a publish-blocking gate band of
-  [11000, 15000]), so the estimator flip needs its own re-derived band plus a
+  measures (weighted residual variance under decay weights — 7,733 vs the
+  single-season 13,212, measured on the MBB twin, against this league's
+  publish-blocking gate band of [10000, 14000]), so the estimator flip needs
+  its own WBB sweep to re-derive that band, plus a
   season-*t* filter on the published frame, and it republishes 52 live assets.
 - **SPM-prior RAPM (2026-09-02, PR #19) — measured, engine support shipped, not
   yet the producer default.** Shrinking toward a box-score plus/minus estimate
