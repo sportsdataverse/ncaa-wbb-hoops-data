@@ -52,5 +52,8 @@ def test_raw_sources_point_at_this_league_never_the_twin():
         f"RAW_HTTP_BASE must end with the {league!r} tree, got {config.RAW_HTTP_BASE!r}"
     )
     assert f"ncaa-{league}-hoops-raw" in config.RAW_HTTP_BASE
-    assert f"ncaa-{'mbb' if league == 'wbb' else 'wbb'}-hoops-raw" not in config.RAW_HTTP_BASE
+    assert (
+        f"ncaa-{'mbb' if league == 'wbb' else 'wbb'}-hoops-raw"
+        not in config.RAW_HTTP_BASE
+    )
     assert config.RAW_ROOT_ENV == f"NCAA_{league.upper()}_RAW_ROOT"

@@ -99,3 +99,29 @@ REGISTRY: dict[str, DatasetSpec] = {
     ),
     "shots": DatasetSpec("shots", _T + "shots", _T + "shots", "shots"),
 }
+
+
+# --- release sidecar metadata -------------------------------------------------
+# Every published tag carries package_function.txt/.json naming the loader a
+# consumer reaches the data through -- the half of R's sportsdataverse_save()
+# the Python publisher used to drop. Values are NOT invented: where the R
+# producer already published a package_function to the tag, that exact string
+# is reused, so re-stamping from Python does not change what a consumer sees.
+# Python-only tags that never had one name the sdv-py loader instead.
+#
+# Keyed by tag, not dataset -- several datasets can share one tag.
+# The publish tests assert every REGISTRY tag has an entry, so a new dataset
+# cannot ship an unnamed tag.
+PKG_FUNCTION: dict[str, str] = {
+    "ncaa_wbb_lineups": "sportsdataverse.wbb.load_ncaa_wbb_lineups()",
+    "ncaa_wbb_matchup_stints": "sportsdataverse.wbb.load_ncaa_wbb_matchup_stints()",
+    "ncaa_wbb_pbp": "sportsdataverse.wbb.load_ncaa_wbb_pbp()",
+    "ncaa_wbb_player_box": "sportsdataverse.wbb.load_ncaa_wbb_player_box()",
+    "ncaa_wbb_possessions": "sportsdataverse.wbb.load_ncaa_wbb_possessions()",
+    "ncaa_wbb_rosters": "sportsdataverse.wbb.load_ncaa_wbb_rosters()",
+    "ncaa_wbb_schedule": "sportsdataverse.wbb.load_ncaa_wbb_schedule()",
+    "ncaa_wbb_shots": "sportsdataverse.wbb.load_ncaa_wbb_shots()",
+    "ncaa_wbb_team_box": "sportsdataverse.wbb.load_ncaa_wbb_team_box()",
+    "ncaa_wbb_team_ids": "sportsdataverse.wbb.load_ncaa_wbb_team_ids()",
+    "ncaa_wbb_team_rosters": "sportsdataverse.wbb.load_ncaa_wbb_team_rosters()",
+}
