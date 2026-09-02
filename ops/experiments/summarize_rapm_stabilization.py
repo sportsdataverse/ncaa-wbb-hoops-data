@@ -17,9 +17,28 @@ FLOOR = {"mbb": 0.93, "wbb": 0.89}
 
 
 def load(paths: "list[str]") -> list:
-    out = []
+    """Read result files and validate what the verdict depends on.
+
+    The league is read from the RECORDS, never inferred from a filename: a WBB
+    result saved as ``results.json`` would otherwise be scored against the MBB
+    Torvik floor and could flip ``torvik_ok``.
+    """
+    if not paths:
+        raise SystemExit("usage: summarize_rapm_stabilization.py <results.json> [...]")
+    out: list = []
     for p in paths:
         out.extend(json.loads(Path(p).read_text(encoding="utf-8")))
+    if not out:
+        raise SystemExit(f"no records in {paths}")
+    if any(k not in r for k in ("league", "frozen") for r in out):
+        raise SystemExit(
+            "records predate the league/frozen stamp -- re-run rapm_stabilization.py to regenerate"
+        )
+    leagues = {r["league"] for r in out}
+    if len(leagues) != 1:
+        raise SystemExit(f"records mix leagues {sorted(leagues)}; score one league at a time")
+    if leagues - set(FLOOR):
+        raise SystemExit(f"unknown league {leagues}; expected one of {sorted(FLOOR)}")
     return out
 
 
@@ -178,9 +197,9 @@ def _mean_c2(recs: list, name: str) -> dict:
 
 
 def main(argv: "list[str] | None" = None) -> int:
-    argv = argv or sys.argv[1:]
-    league = "wbb" if any("wbb" in a for a in argv) else "mbb"
+    argv = argv if argv is not None else sys.argv[1:]
     recs = load(argv)
+    league = recs[0]["league"]
     if len({(r["decay"], r["shrink_k"]) for r in recs}) > 1:
         print("## Development grid (mean C3 MAE over dev seasons)\n")
         print(dev_table(recs))
@@ -207,6 +226,13 @@ def main(argv: "list[str] | None" = None) -> int:
     )
     print(c1_table(recs))
     print("\n## Verdict (pre-registered rule, applied in code)\n")
+    if not all(r["frozen"] for r in recs):
+        print(
+            "REFUSED: these records were produced with hyperparameters that are NOT the pair "
+            "frozen on the development seasons, so they are an exploratory run and must not be "
+            "read as the pre-registered verdict. Re-run without --decay/--shrink-k overrides."
+        )
+        return 1
     print(verdict(recs, summary))
     return 0
 

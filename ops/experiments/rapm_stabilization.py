@@ -52,6 +52,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -84,6 +85,12 @@ _ORACLE = Path(__file__).resolve().parents[1] / "oracle"
 #: Pre-registered. Hyperparameters are chosen on DEV and never revisited after.
 DEV_SEASONS = [2014, 2015]
 EVAL_SEASONS = list(range(2016, 2026))
+
+#: The hyperparameters FROZEN on the development seasons (see the report). An
+#: ``--stage eval`` run with any other pair is stamped ``frozen: false``, written to a
+#: separate ``*_experimental`` file, and REFUSED by the summariser -- otherwise an
+#: arbitrary re-run could overwrite the result file and be read as the verdict.
+FROZEN_HYPERPARAMS = {"mbb": (0.5, 100.0), "wbb": (0.75, 0.0)}
 
 #: Pre-registered evaluation constants.
 MULTI_YEAR_WINDOW = 3  # seasons t-2 .. t
@@ -156,9 +163,26 @@ def person_bridge(league: str) -> pl.DataFrame:
     ).unique(subset=["season", "player_id"])
 
 
+def _input_fingerprint(paths: "list[Path]", bridge: pl.DataFrame) -> str:
+    """Short digest of the inputs a cached resolve depends on.
+
+    Keyed into the cache FILENAME, so a corrected possessions tree, roster,
+    name_changes table or person bridge produces a DIFFERENT cache entry instead
+    of silently re-serving stale ``person_id`` mappings -- and silently skipping
+    the coverage check that would have caught them.
+    """
+    parts = [str(int(bridge.hash_rows().sum()))]
+    for p in paths:
+        st = p.stat() if p.is_file() else None
+        parts.append(f"{p.name}:{st.st_size}:{st.st_mtime_ns}" if st else f"{p.name}:absent")
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:12]
+
+
 def resolved_person(league: str, season: int, bridge: pl.DataFrame) -> pl.DataFrame:
     """Slim, person_id-keyed resolved possessions for one season (cached)."""
-    cache = _cache_dir() / f"{league}_resolved_person_{season}.parquet"
+    poss_f, ros_f = _file(league, "possessions", season), _file(league, "team_rosters", season)
+    fp = _input_fingerprint([poss_f, ros_f, _file(league, "name_changes")], bridge)
+    cache = _cache_dir() / f"{league}_resolved_person_{season}_{fp}.parquet"
     if cache.is_file():
         return pl.read_parquet(cache)
     poss_f, ros_f = (
@@ -742,8 +766,10 @@ def run_season(
     poss_t = _exposure(full_st[target])
     out = {
         "season": target,
+        "league": league,
         "decay": decay,
         "shrink_k": shrink_k,
+        "frozen": (decay, shrink_k) == FROZEN_HYPERPARAMS[league],
         "n_test_games": base_games.height,
         "spm_n_train": spm["n_train"],
         "variants": {},
@@ -873,7 +899,16 @@ def main(argv: "list[str] | None" = None) -> int:
                 + f"  ({r['secs']}s)",
                 flush=True,
             )
-    out = Path(a.out or (_cache_dir() / f"{a.league}_{a.stage}_results.json"))
+    experimental = a.stage == "eval" and not all(r["frozen"] for r in records)
+    if experimental:
+        print(
+            f"WARNING: --stage eval with (decay={a.decay}, shrink_k={a.shrink_k}) is NOT the "
+            f"frozen pair {FROZEN_HYPERPARAMS[a.league]} for {a.league}; writing an "
+            "*_experimental* file that the summariser will refuse to score.",
+            flush=True,
+        )
+    stem = f"{a.league}_{a.stage}{'_experimental' if experimental else ''}_results.json"
+    out = Path(a.out or (_cache_dir() / stem))
     out.write_text(json.dumps(records, indent=2, default=float), encoding="utf-8")
     print(f"wrote {out}")
     return 0
