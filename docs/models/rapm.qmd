@@ -376,7 +376,7 @@ is a tier, not a ranking.
   strongest public APM systems (catalogued in the APM research corpus): 3P%
   luck-adjusting the target, and informative priors by player archetype
   instead of a flat ridge.
-- **Resolved (2026-09-01, PR #n):** exact standard errors — the ridge
+- **Resolved (2026-09-01, PR #17):** exact standard errors — the ridge
   posterior SEs are published as `orapm_se` / `drapm_se` / `rapm_net_se`,
   validated by a split-half calibration gate (sampling-SE coverage at the
   0.954 nominal in every season) and shown as ±2·SE intervals above. Finding
