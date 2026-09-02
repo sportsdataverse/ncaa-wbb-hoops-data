@@ -30,6 +30,10 @@ jobs:
           sparse-checkout: |
             python
             tests
+            .github
+            ops
+            scripts
+            models
             pyproject.toml
             uv.lock
           sparse-checkout-cone-mode: false
