@@ -38,6 +38,45 @@ Notes:
 - WBB is HALVES before season 2016 (the quarters model silently empties those
   seasons) — inherited by everything downstream of `possessions`.
 
+## Evaluated, NOT adopted: RAPM stabilization levers (2026-09-02, PR #19)
+
+Two levers were measured against the shipped flat-ridge baseline over ten held-out seasons
+(2016–2025), hyperparameters frozen on 2014–2015, ~25% of games held out per season by
+`contest_id % 4 == 0`. Harness: `ops/experiments/rapm_stabilization.py` (re-runnable);
+decision rule applied in code by `ops/experiments/summarize_rapm_stabilization.py`; full
+design and tables in the ClaudeCowork ledger
+`2026-09-01-writeup-improvements/reports/rapm-stabilization.md`. Engine support (default-off)
+is `sportsdataverse-py#436`.
+
+| lever | out-of-sample game-margin MAE gain (12,398 held-out games) | seasons better | status |
+|---|---|---|---|
+| multi-year (stacked, `decay = 0.75`) | **0.280** pts/game, pooled game-cluster bootstrap 95% CI excludes 0 | 10/10 | measured, NOT the producer default |
+| SPM prior (`prior_mean=`, exposure shrink `k = 0`) | **0.239** pts/game, CI excludes 0 | 10/10 | measured, NOT the producer default |
+| both together | **0.442** pts/game, CI excludes 0 | 10/10 | measured, NOT the producer default |
+
+**Why not adopted.** Both beat the baseline on the pre-registered criteria and hold the Torvik
+floor, but flipping the producer's estimator republishes 52 live assets and first needs:
+
+1. **A re-derived `σ̂²` gate band.** Gate 5(a) bounds `σ̂²` to `[10000, 14000]`; a decayed-weight pooled
+   fit measures **7,733** against the single-season **13,212** (measured on the MBB twin at decay 0.5; WBB needs its own sweep before its band is set).
+   That is not a bug — under decay weights `σ̂²` is a weighted residual variance on a different
+   weight scale, i.e. a DIFFERENT quantity — but the band must be re-derived from its own full
+   sweep. It must **not** be widened to let the change through.
+2. **A season-`t` filter on the published frame.** A pooled fit rates — persons across three
+   seasons where the single-season fit rates —; without the filter, and without reporting
+   season-`t` exposure, `off_poss` / `def_poss` silently become three-season sums.
+
+**Finding worth keeping:** the multi-year gain is **not** concentrated below ~200 possessions,
+which is what the original backlog item assumed. The absolute next-season-Spearman gain is flat
+across playing time, so there is no possession threshold above which it stops helping — it is a
+uniform variance reduction, not a tail stabiliser. The SPM prior *does* have a threshold, at
+roughly **100 possessions**: it is worth +0.03…+0.06 Spearman above it and nothing below, because
+under ~100 possessions a player's box *rates* are themselves noise.
+
+**Not a blocker (measured, contrary to the 2026-09-01 design note):** the SE path survives pooling
+— the 3-season design is dim 17,267 and `compute_se=True` completes in 24.4 s (vs 6.4 s
+single-season). The engine's documented ~20k ceiling binds at a 4–5 season window.
+
 ## Operability (Track C steps 2–6)
 
 - `models/manifest.yaml` — single home for the model/stage list (guarded by `tests/test_model_manifest.py`).
