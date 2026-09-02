@@ -4,9 +4,15 @@ A multi-season fit is the point at which "season ``t``'s rating" can quietly
 become "season ``t``'s rating, with hindsight". Two properties have to hold, and
 prose in a docstring is not evidence of either:
 
-1. **No season after ``t`` reaches the fit for ``t``** -- proved by instrumenting
-   every input read of a REAL season across a whole ``run_season`` and checking
-   the season set, not by reading the code.
+1. **No possession or box-score input for a season after ``t`` reaches the fit
+   for ``t``** -- proved by instrumenting every input read of a REAL season
+   across a whole ``run_season`` and checking the season set, not by reading the
+   code. The claim is scoped on purpose: the cross-season identity bridge IS
+   built from every roster season, including seasons after ``t``, so the spy is
+   cleared after ``person_bridge`` and a ``person_id`` merge can in principle be
+   informed by a later roster. That channel carries identity only, never
+   performance data. Narrowing the bridge to seasons ``<= t`` is open work, not
+   something this test currently proves.
 2. **The published season-``t`` frame is season ``t``'s** -- a pooled fit rates
    everyone in the window on window-length exposure, so the per-season asset must
    be cut back to season-``t`` participants carrying season-``t`` possessions.
@@ -88,7 +94,11 @@ def test_no_season_after_the_target_is_ever_read(monkeypatch, tmp_path):
 
     monkeypatch.setattr(bl, "_data_file", spy)
     bridge = bl.person_bridge(LEAGUE)
-    seen.clear()  # the bridge legitimately spans every roster season
+    # The bridge reads every roster season by construction, INCLUDING seasons
+    # after the target; clearing here is what scopes this test to the
+    # possession/box-score inputs. See the module docstring -- the scope is
+    # deliberate and disclosed, not an oversight being hidden by a clear().
+    seen.clear()
     chosen = bl.choose_estimator(LEAGUE, TARGET, bridge, {})
     passed, _rec = bl.run_season(
         LEAGUE, TARGET, tmp_path, bridge, bl.SPEARMAN_FLOOR[LEAGUE], {}, survey=True

@@ -10,9 +10,11 @@ This script asks it for each lever SEPARATELY, which is what makes the answer
 actionable: it refits odd-vs-even ``contest_id`` halves under flat / pooled /
 SPM-prior / both and reports the sampling coverage of ``orapm``, ``drapm`` and
 ``rapm_net``. Every pooled season is split by the SAME parity, so the two halves
-share no possession; the SPM prior is refit per half from that half's games
-only, because a prior fitted on all the games would see the other half and the
-coverage would be inflated by exactly the leak the split is there to avoid.
+share no possession. The SPM COEFFICIENTS are fitted once, on baseline RAPM of
+seasons t-3..t-1, and are shared by both halves -- they are strictly in the past
+and carry no season-t information. What is split is the season-t input the
+coefficients are applied to: `box_features` and the exposure are restricted to
+that half's games, so a half's prior cannot see the other half's box scores.
 
 Observed (2026-09-02) -- and the reason the producer's default is ``pooled`` and
 not ``pooled_spm``::
