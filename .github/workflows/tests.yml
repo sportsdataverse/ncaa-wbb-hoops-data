@@ -11,9 +11,9 @@ name: tests
 on:
   push:
     branches: [main]
-    paths: ['python/**', 'tests/**', 'pyproject.toml', 'uv.lock', '.github/workflows/tests.yml']
+    paths: ['python/**', 'tests/**', 'models/**', 'pyproject.toml', 'uv.lock', '.github/workflows/tests.yml']
   pull_request:
-    paths: ['python/**', 'tests/**', 'pyproject.toml', 'uv.lock', '.github/workflows/tests.yml']
+    paths: ['python/**', 'tests/**', 'models/**', 'pyproject.toml', 'uv.lock', '.github/workflows/tests.yml']
   workflow_dispatch:
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
             .github
             ops
             scripts
-            models
+            /models
             pyproject.toml
             uv.lock
           sparse-checkout-cone-mode: false
