@@ -24,9 +24,16 @@ from great_tables import GT
 from IPython.display import HTML, display
 
 LG = "wbb"
-ROOT = Path.cwd()
-while not (ROOT / "ops" / "out_league").is_dir():
-    ROOT = ROOT.parent
+ROOT = next(
+    (p for p in [Path.cwd(), *Path.cwd().parents] if (p / "ops" / "out_league").is_dir()),
+    None,
+)
+if ROOT is None:
+    # A bare `while ...: ROOT = ROOT.parent` walk never terminates here: at the
+    # filesystem root `Path.parent` returns the root again, so a missing (or
+    # not-yet-built) ops/out_league spins at 100% CPU instead of failing. Render
+    # from a checkout where the build stage has run.
+    raise SystemExit("no ops/out_league above " + str(Path.cwd()) + " -- run the build stage first")
 OUT = ROOT / "ops" / "out_league"
 CARD = json.loads((ROOT / "docs" / "models" / f"ncaa_{LG}_rapm_card.json").read_text(encoding="utf-8"))
 files = sorted(OUT.glob(f"ncaa_{LG}_rapm_league_*.parquet"))
@@ -374,10 +381,9 @@ is a tier, not a ranking.
 
 ## Avenues for improvement & open issues
 
-- **Luck adjustment and archetype priors** — the two known gaps versus the
-  strongest public APM systems (catalogued in the APM research corpus): 3P%
-  luck-adjusting the target, and informative priors by player archetype
-  instead of a flat ridge.
+- **Luck adjustment** — 3P% luck-adjusting the target is still open (the other
+  half of this item, informative priors instead of a flat ridge, is answered by
+  the SPM-prior result below).
 - **Resolved (2026-09-01, PR #17):** exact standard errors — the ridge
   posterior SEs are published as `orapm_se` / `drapm_se` / `rapm_net_se`,
   validated by a split-half calibration gate (sampling-SE coverage at the
@@ -387,6 +393,39 @@ is a tier, not a ranking.
   sets most of the interval.
 - **Within-team CI** — Path A still requires the raw HTML bundle checkout; a
   store-backed runner would let it join the wired retrain.
-- **Known issue:** multi-year RAPM (stabilizing low-minute players across
-  seasons) is unbuilt; single-season estimates stay noisy below ~200
-  possessions.
+- **Resolved (2026-09-02, PR #19):** multi-year RAPM is built and **measured**,
+  and the premise this item was written on turned out to be wrong. A
+  decayed-weight stacked design (seasons *t−2…t* in one fit, columns keyed by
+  the cross-season `person_id`, season *s* weighted `decay^(t−s)` with
+  `decay = 0.75`, each season offset to *t*'s scoring level) beats the
+  single-season baseline on out-of-sample game-margin MAE by **0.280 points per
+  game** over 12,398 held-out games, better in 10/10 seasons, pooled
+  game-cluster bootstrap 95% CI excluding zero. Next-season Spearman for
+  returning players rises 0.4497 → 0.4657.
+  **But the gain is NOT concentrated in the low-possession tail.** The absolute
+  Spearman gain is flat across playing time — +0.015 in the <100-possession bin
+  and +0.014 in the 1500+ bin — so there is no possession threshold above which
+  it stops helping. It is a uniform variance reduction, not a tail stabiliser.
+  The *relative* gain is largest in the tail only because the baseline is near
+  zero there (0.0963 → 0.1252 for <200 possessions vs 0.5228 → 0.5374 for 1000+); those are
+  different claims and should not be conflated.
+  **Not wired into this producer yet, on purpose:** pooling changes what `σ̂²`
+  measures (weighted residual variance under decay weights — 7,733 vs the
+  single-season 13,212, measured on the MBB twin, against this league's
+  publish-blocking gate band of [10000, 14000]), so the estimator flip needs
+  its own WBB sweep to re-derive that band, plus a
+  season-*t* filter on the published frame, and it republishes 52 live assets.
+- **SPM-prior RAPM (2026-09-02, PR #19) — measured, engine support shipped, not
+  yet the producer default.** Shrinking toward a box-score plus/minus estimate
+  instead of toward zero (`solve_rapm_league(prior_mean=…)`, a re-centring that
+  leaves λ and every `*_se` column untouched) is worth **0.239 points per game**
+  of margin error out-of-sample and lifts next-season Spearman 0.4497 → 0.4731; combined with
+  multi-year it is **0.442** and 0.4852. It has a real threshold at roughly
+  **100 possessions**: +0.03…+0.06 Spearman in every bin above it, and
+  -0.005 below it — under ~100 possessions a player's box *rates* are
+  themselves noise, so the prior is a confident-looking centre made of noise.
+  Exposure shrink `poss/(poss+k)` with `k = 0` was chosen on held-out
+  development seasons.
+  Full pre-registered design, all three criteria, and the leakage boundaries:
+  `ops/experiments/rapm_stabilization.py` (re-runnable) and the
+  ClaudeCowork ledger `2026-09-01-writeup-improvements/reports/rapm-stabilization.md`.
