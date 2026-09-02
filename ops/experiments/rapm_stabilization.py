@@ -899,16 +899,30 @@ def main(argv: "list[str] | None" = None) -> int:
                 + f"  ({r['secs']}s)",
                 flush=True,
             )
-    experimental = a.stage == "eval" and not all(r["frozen"] for r in records)
+    # "Registered" is the WHOLE protocol, not just the hyperparameters: the frozen
+    # pair AND every evaluation season. `--seasons 2014` with the frozen pair would
+    # otherwise stamp frozen:true, take the canonical filename, and score a verdict
+    # on a hyperparameter-SELECTION season.
+    registered = (
+        a.stage == "eval"
+        and all(r["frozen"] for r in records)
+        and {r["season"] for r in records} == set(EVAL_SEASONS)
+    )
+    experimental = a.stage == "eval" and not registered
     if experimental:
         print(
-            f"WARNING: --stage eval with (decay={a.decay}, shrink_k={a.shrink_k}) is NOT the "
-            f"frozen pair {FROZEN_HYPERPARAMS[a.league]} for {a.league}; writing an "
+            f"WARNING: --stage eval with (decay={a.decay}, shrink_k={a.shrink_k}) over "
+            f"{sorted({r['season'] for r in records})} is NOT the registered protocol "
+            f"(frozen pair {FROZEN_HYPERPARAMS[a.league]} over {EVAL_SEASONS}); writing an "
             "*_experimental* file that the summariser will refuse to score.",
             flush=True,
         )
     stem = f"{a.league}_{a.stage}{'_experimental' if experimental else ''}_results.json"
     out = Path(a.out or (_cache_dir() / stem))
+    if experimental and "_experimental" not in out.name:
+        # An explicit --out must not be able to park an unregistered run on the
+        # canonical artifact's path.
+        out = out.with_name(out.stem + "_experimental" + out.suffix)
     out.write_text(json.dumps(records, indent=2, default=float), encoding="utf-8")
     print(f"wrote {out}")
     return 0

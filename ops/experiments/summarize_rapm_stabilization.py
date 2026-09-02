@@ -30,15 +30,21 @@ def load(paths: "list[str]") -> list:
         out.extend(json.loads(Path(p).read_text(encoding="utf-8")))
     if not out:
         raise SystemExit(f"no records in {paths}")
-    if any(k not in r for k in ("league", "frozen") for r in out):
+    if any(k not in r for k in ("league", "frozen", "season", "decay", "shrink_k") for r in out):
         raise SystemExit(
             "records predate the league/frozen stamp -- re-run rapm_stabilization.py to regenerate"
         )
+    # Types, not just presence: a JSON string "false" is truthy, so a malformed
+    # record would otherwise sail through `all(r["frozen"] ...)` and be scored.
+    if any(type(r["frozen"]) is not bool for r in out):
+        raise SystemExit("malformed records: 'frozen' must be a JSON boolean")
+    if any(not isinstance(r["league"], str) for r in out):
+        raise SystemExit("malformed records: 'league' must be a string")
     leagues = {r["league"] for r in out}
     if len(leagues) != 1:
         raise SystemExit(f"records mix leagues {sorted(leagues)}; score one league at a time")
     if leagues - set(FLOOR):
-        raise SystemExit(f"unknown league {leagues}; expected one of {sorted(FLOOR)}")
+        raise SystemExit(f"unknown league {sorted(leagues)}; expected one of {sorted(FLOOR)}")
     return out
 
 
@@ -141,6 +147,30 @@ def c1_table(recs: list) -> str:
     return "\n".join(lines)
 
 
+def _protocol_violations(recs: list, league: str) -> "list[str]":
+    """Verify the run IS the registered protocol, rather than trusting its stamp.
+
+    The season set and hyperparameters are re-derived from the records themselves
+    and compared against the harness constants, so a partial or re-tuned run cannot
+    be presented as the verdict merely by carrying ``frozen: true``.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from rapm_stabilization import EVAL_SEASONS, FROZEN_HYPERPARAMS
+
+    out = []
+    if not all(r["frozen"] for r in recs):
+        out.append("hyperparameters are not the pair frozen on the development seasons")
+    pairs = {(r["decay"], r["shrink_k"]) for r in recs}
+    if pairs != {FROZEN_HYPERPARAMS[league]}:
+        out.append(f"hyperparameters {sorted(pairs)} != frozen {FROZEN_HYPERPARAMS[league]}")
+    seasons = {r["season"] for r in recs}
+    if seasons != set(EVAL_SEASONS):
+        missing = sorted(set(EVAL_SEASONS) - seasons)
+        extra = sorted(seasons - set(EVAL_SEASONS))
+        out.append(f"evaluation seasons incomplete (missing {missing}, unexpected {extra})")
+    return out
+
+
 def verdict(recs: list, summary: dict) -> str:
     """The pre-registered decision rule, applied in code so it cannot drift."""
     n_seasons = len(summary["seasons"])
@@ -226,12 +256,12 @@ def main(argv: "list[str] | None" = None) -> int:
     )
     print(c1_table(recs))
     print("\n## Verdict (pre-registered rule, applied in code)\n")
-    if not all(r["frozen"] for r in recs):
-        print(
-            "REFUSED: these records were produced with hyperparameters that are NOT the pair "
-            "frozen on the development seasons, so they are an exploratory run and must not be "
-            "read as the pre-registered verdict. Re-run without --decay/--shrink-k overrides."
-        )
+    problems = _protocol_violations(recs, league)
+    if problems:
+        print("REFUSED -- these records are not the pre-registered evaluation:")
+        for p in problems:
+            print(f"  - {p}")
+        print("A verdict is only printed for the registered protocol. Re-run it in full.")
         return 1
     print(verdict(recs, summary))
     return 0
