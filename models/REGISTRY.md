@@ -12,10 +12,20 @@ only RAISE them. `tests/test_model_registry.py` keeps this table in lockstep.
 | Within-team RAPM (Path A — apportions one team's performance across its players) | per-season parquet, **55 assets** | `ncaa_wbb_rapm_within_team` | raw NCAA HTML bundles via the sdv-py hoop-explorer engine (`wbb_rapm.build_player_context` + ridge), ES lineup buckets rebuilt from the parse chain | `ops/build_rapm.py` → `ops/publish_rapm.py` | shape proven by the committed e2e lineup-aggregation test in sdv-py; **different estimand** from league-wide — `estimand` column stamped into every row; no Torvik gate (not comparable) | 2026-08-24 | manual by design via `python/ncaa_wbb_model_02_rapm_within_team.py` — needs the raw NCAA HTML bundle checkout, not runner-friendly |
 
 Notes:
-- The published `*_se` are POSTERIOR standard errors `sqrt(σ̂²·diag((X'WX+λI)⁻¹))` — a credible
-  interval for the true impact under the ridge prior (a low-minute player sits at ~0 ± σ̂/√λ). The
-  frequentist sandwich `σ̂²(M − λM²)` is computed by the engine only to calibrate them (split-half
-  gate 5d); it is not published because it collapses to ~0 for a player the ridge pins at zero.
+- The published `*_se` are POSTERIOR standard errors. Writing `M = (X'WX+λI)⁻¹`, the per-component
+  SEs are `orapm_se[i] = sqrt(σ̂²·M[i,i])` and `drapm_se[i] = sqrt(σ̂²·M[P+i,P+i])`. **`rapm_net_se`
+  is NOT `sqrt(orapm_se² + drapm_se²)`** — `rapm_net = orapm + drapm` (drapm is already signed
+  so higher = better defense), so its variance carries the O/D covariance term:
+
+      rapm_net_se[i] = sqrt(σ̂²·(M[i,i] + M[P+i,P+i] + 2·M[i,P+i]))
+
+  Reproducing the net interval from the two marginal SEs alone gives the WRONG width (O and D
+  for the same player are estimated from the same possessions and are correlated). These are a
+  credible interval for the true impact under the ridge prior (a low-minute player sits at
+  ~0 ± σ̂/√λ). The frequentist sandwich COVARIANCE `σ̂²(M − λM²)` — whose SEs are
+  `sqrt(diag(·))`, with the same +2·cov(O,D) term for net — is computed by the engine only to
+  calibrate them (split-half gate 5d); it is not published because it collapses to ~0 for a
+  player the ridge pins at zero.
 - **They are conservative by ≈2.5×** relative to how far the estimate actually moves between two
   halves of a season (split-half z-sd ≈ 0.38, not 1.0) — λ=1000 is prior-dominated. `±2·SE` is a
   cautious band for the true impact; it is NOT the repeatability of the number, so gate 5d's ~1.0

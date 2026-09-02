@@ -66,7 +66,8 @@ matrix) and the net SE including the O/D posterior covariance. Under the
 prior the penalty encodes (β ~ N(0, σ²/λ)) this is a credible interval for
 the *true* impact: a low-minute player sits at ≈ 0 ± σ̂/√λ (≈ ±3.6 per
 component) and the interval tightens as the data separate a player from
-his lineups. The alternative, the frequentist sandwich σ̂²·M(XᵀWX)M, is the
+his lineups. The alternative, the frequentist sandwich covariance σ̂²·M(XᵀWX)M (its SEs are
+`sqrt` of the diagonal), is the
 *repeatability of the shrunk estimate*: it collapses toward 0 for a player
 the ridge pins at zero, so it is not an interval for the truth — but it is
 exactly what a refit can check, and the producer computes it as the
@@ -356,7 +357,8 @@ is a tier, not a ranking.
   the raw HTML bundle checkout).
 - **Standard errors:** posterior `sqrt(σ̂²·diag((XᵀWX+λI)⁻¹))` from one dense
   Cholesky inverse of the (2P+1)-square penalised Gram matrix (≈10k, seconds);
-  the sampling SE `σ̂²(M − λM²)` comes from the same inverse and drives the
+  the sampling SE `sqrt(diag(σ̂²(M − λM²)))` — `σ̂²(M − λM²)` is the sampling
+  COVARIANCE matrix — comes from the same inverse and drives the
   split-half calibration gate (gate 5). Engine: sdv-py
   `mbb_ncaa_rapm_league.solve_rapm_league` / `split_half_se_check`.
 - **Gates:** frozen in the table above; oracle fixture

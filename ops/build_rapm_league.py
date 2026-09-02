@@ -44,8 +44,9 @@ the floor only.
    the ridge-POSTERIOR standard errors ``orapm_se`` / ``drapm_se`` /
    ``rapm_net_se`` = ``sqrt(sigma2 * diag((X'WX + lambda I)^-1))`` (net with
    the O/D covariance), published here as additive columns, plus the
-   sampling (sandwich) SEs ``sigma2 * (M - lambda M^2)`` used ONLY by this
-   gate. Floors frozen from the 2026-09-01 sweep (16 seasons per league,
+   sampling (sandwich) SEs ``sqrt(diag(sigma2 * (M - lambda M^2)))`` used
+   ONLY by this gate -- ``sigma2 * (M - lambda M^2)`` is the sampling
+   COVARIANCE matrix; the SEs are the square roots of its diagonal. Floors frozen from the 2026-09-01 sweep (16 seasons per league,
    ``dev``-born survey, values in the module constants):
    a. ``sigma2`` inside the era band -- mbb [11000, 15000] (observed
       12562..13332), wbb [10000, 14000] (observed 11634..12408). It is the
@@ -391,7 +392,16 @@ def write_card(league: str, out_dir: Path) -> Path:
 
     stem = _DATA[league][2]
     seasons = []
-    for mf_path in sorted(out_dir.glob(f"{stem}_rapm_league_*.manifest.json")):
+    # Iterate SEASONS, never glob: a stale or hand-made manifest left in out_dir
+    # would otherwise be written into the card as if it were part of this sweep.
+    # A missing manifest is a failure, not a skip -- the card claims a FULL run.
+    for season in SEASONS:
+        mf_path = out_dir / f"{stem}_rapm_league_{season}.manifest.json"
+        if not mf_path.exists():
+            raise FileNotFoundError(
+                f"evaluation card needs a manifest for every season in SEASONS; {mf_path.name} is missing. "
+                "Re-run the full --all sweep; the card is the record of one complete run."
+            )
         mf = json.loads(mf_path.read_text(encoding="utf-8"))
         rho = mf["torvik_spearman"]
         seasons.append(
@@ -421,7 +431,7 @@ def write_card(league: str, out_dir: Path) -> Path:
         "lambda": float(DEFAULT_RIDGE_LAMBDA),
         "se": (
             "posterior sqrt(sigma2 * diag((X'WX + lambda I)^-1)) published; "
-            "sampling sigma2 * (M - lambda M^2) drives the split-half gate"
+            "sampling sqrt(diag(sigma2 * (M - lambda M^2))) drives the split-half gate"
         ),
         "seasons": seasons,
     }
