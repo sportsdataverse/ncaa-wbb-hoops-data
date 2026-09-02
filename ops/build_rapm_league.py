@@ -226,6 +226,17 @@ ESTIMATORS = ("flat", "pooled")
 #: cannot be distinguished from changing the test until it passes on the
 #: evidence available, so it is written down rather than done. MBB is unaffected
 #: -- its pooled Spearman is -0.8611..-0.9108, clear of the ceiling.
+#:
+#: Those WBB numbers stay RE-DERIVABLE. A recorded measurement that no committed
+#: command reproduces is exactly how the SE-calibration script drifted, so the
+#: survey-only override is written down; it writes nothing and publishes
+#: nothing::
+#:
+#:     python -c "import sys; sys.path.insert(0, 'ops'); #:       import build_rapm_league as bl; bl.POOLED_LEAGUES = {'mbb', 'wbb'}; #:       sys.argv = ['x', '--league', 'wbb', '--all', '--survey', 'out.json']; #:       sys.exit(bl.main())"
+#:
+#: Verified against the merged engine (sdv-py 6bb3e29d1): 14 pooled seasons,
+#: sigma2 11,742.7 (2013) .. 12,400.3 (2026), Spearman -0.8507..-0.7947, gate
+#: 5(b) failing on exactly 2021 and 2024.
 POOLED_LEAGUES = {"mbb"}
 
 #: Gate 5 (standard errors) -- frozen from observed sweeps, provenance in the

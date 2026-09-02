@@ -99,9 +99,13 @@ def test_no_season_after_the_target_is_ever_read(monkeypatch, tmp_path):
     # possession/box-score inputs. See the module docstring -- the scope is
     # deliberate and disclosed, not an oversight being hidden by a clear().
     seen.clear()
-    chosen = bl.choose_estimator(LEAGUE, TARGET, bridge, {})
+    # One cache for both calls: choose_estimator resolves the predecessors and
+    # run_season would otherwise resolve them again, doubling the slowest part of
+    # this test for no extra coverage. The spy still records every read.
+    cache: dict = {}
+    chosen = bl.choose_estimator(LEAGUE, TARGET, bridge, cache)
     passed, _rec = bl.run_season(
-        LEAGUE, TARGET, tmp_path, bridge, bl.SPEARMAN_FLOOR[LEAGUE], {}, survey=True
+        LEAGUE, TARGET, tmp_path, bridge, bl.SPEARMAN_FLOOR[LEAGUE], cache, survey=True
     )
     assert passed, (
         "the survey run must clear every gate for this assertion to mean anything"
