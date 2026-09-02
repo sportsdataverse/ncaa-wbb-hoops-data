@@ -229,14 +229,17 @@ ESTIMATORS = ("flat", "pooled")
 #:
 #: Those WBB numbers stay RE-DERIVABLE. A recorded measurement that no committed
 #: command reproduces is exactly how the SE-calibration script drifted, so the
-#: survey-only override is written down; it writes nothing and publishes
-#: nothing::
+#: survey-only override is written down. One line, because a continuation inside
+#: a ``#:`` block is not copy-pasteable; it writes nothing and publishes nothing::
 #:
-#:     python -c "import sys; sys.path.insert(0, 'ops'); #:       import build_rapm_league as bl; bl.POOLED_LEAGUES = {'mbb', 'wbb'}; #:       sys.argv = ['x', '--league', 'wbb', '--all', '--survey', 'out.json']; #:       sys.exit(bl.main())"
+#:     python -c "import sys;sys.path.insert(0,'ops');import build_rapm_league as b;b.POOLED_LEAGUES={'mbb','wbb'};sys.argv=['x','--league','wbb','--all','--survey','out.json'];sys.exit(b.main())"
 #:
-#: Verified against the merged engine (sdv-py 6bb3e29d1): 14 pooled seasons,
-#: sigma2 11,742.7 (2013) .. 12,400.3 (2026), Spearman -0.8507..-0.7947, gate
-#: 5(b) failing on exactly 2021 and 2024.
+#: Verified 2026-09-02 against sportsdataverse ``efd31626c`` -- the revision
+#: ``uv.lock`` pins, and the first pin to contain ``6bb3e29d1`` (sdv-py#441, the
+#: weight-scale correction to ``sigma2``). 14 pooled seasons, sigma2 11,742.7
+#: (2013) .. 12,400.3 (2026), Spearman -0.8507..-0.7947, gate 5(b) failing on
+#: exactly 2021 (-0.7947) and 2024 (-0.7953). Re-verify after any lock bump: on
+#: an engine predating that commit every pooled sigma2 reads ~0.583x these.
 POOLED_LEAGUES = {"mbb"}
 
 #: Gate 5 (standard errors) -- frozen from observed sweeps, provenance in the
