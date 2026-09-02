@@ -24,9 +24,16 @@ from great_tables import GT
 from IPython.display import HTML, display
 
 LG = "wbb"
-ROOT = Path.cwd()
-while not (ROOT / "ops" / "out_league").is_dir():
-    ROOT = ROOT.parent
+ROOT = next(
+    (p for p in [Path.cwd(), *Path.cwd().parents] if (p / "ops" / "out_league").is_dir()),
+    None,
+)
+if ROOT is None:
+    # A bare `while ...: ROOT = ROOT.parent` walk never terminates here: at the
+    # filesystem root `Path.parent` returns the root again, so a missing (or
+    # not-yet-built) ops/out_league spins at 100% CPU instead of failing. Render
+    # from a checkout where the build stage has run.
+    raise SystemExit("no ops/out_league above " + str(Path.cwd()) + " -- run the build stage first")
 OUT = ROOT / "ops" / "out_league"
 CARD = json.loads((ROOT / "docs" / "models" / f"ncaa_{LG}_rapm_card.json").read_text(encoding="utf-8"))
 files = sorted(OUT.glob(f"ncaa_{LG}_rapm_league_*.parquet"))
