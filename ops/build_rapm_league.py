@@ -40,6 +40,34 @@ the floor only.
    ``UNGATED_SEASONS``, still subject to gates 1-2, and marked
    ``external_gate="ungated_no_oracle"`` in the manifest. Every other
    oracle-less season fails.
+5. Standard-error sanity (2026-09-01). sdv-py ``solve_rapm_league`` returns
+   the ridge-POSTERIOR standard errors ``orapm_se`` / ``drapm_se`` /
+   ``rapm_net_se`` = ``sqrt(sigma2 * diag((X'WX + lambda I)^-1))`` (net with
+   the O/D covariance), published here as additive columns, plus the
+   sampling (sandwich) SEs ``sqrt(diag(sigma2 * (M - lambda M^2)))`` used
+   ONLY by this gate -- ``sigma2 * (M - lambda M^2)`` is the sampling
+   COVARIANCE matrix; the SEs are the square roots of its diagonal. Floors frozen from the 2026-09-01 sweep (16 seasons per league,
+   ``dev``-born survey, values in the module constants):
+   a. ``sigma2`` inside the era band -- mbb [11000, 15000] (observed
+      12562..13332), wbb [10000, 14000] (observed 11634..12408). It is the
+      per-100 residual variance = 1e4 x the per-possession points variance,
+      so it is the SE-machinery scale-bug catcher.
+   b. Spearman(possessions, rapm_net_se) <= -0.80 (observed mbb
+      -0.965..-0.898, wbb -0.950..-0.872): the SE must fall with playing time.
+   c. median rapm_net_se of the top possession decile < the bottom decile's
+      (observed ratio 0.788..0.819). Strict decile monotonicity is NOT required and
+      NOT observed: the top deciles flatten at a collinearity floor (a
+      starter who never sits is confounded with his team's total).
+   d. Split-half refit (odd vs even ``contest_id``; ``split_half_se_check``):
+      the other half's estimate lies within 2*sqrt(se_A^2 + se_B^2) for
+      >= 0.95 of players under the POSTERIOR SE (observed >= 0.9995 -- a
+      credible interval over-covers a refit by construction, so this is a
+      one-sided guard against SEs that shrank) AND inside [0.92, 0.98] for
+      each of orapm / drapm / rapm_net under the SAMPLING SE (observed mbb
+      0.9465..0.9601, wbb 0.9397..0.9563 against the 0.954 nominal -- the
+      two-sided calibration of sigma2 and the inverse). The POSTERIOR SE is
+      ~2.5x conservative (split-half z-sd ~0.38, not 1.0), so 5d's posterior
+      leg can never be read as nominal calibration.
 
 Usage::
 
@@ -67,7 +95,9 @@ from sportsdataverse.mbb.mbb_ncaa_rapm_input import (
 from sportsdataverse.mbb.mbb_ncaa_rapm_league import (
     DEFAULT_RIDGE_LAMBDA,
     aggregate_stints,
+    possession_deciles,
     solve_rapm_league,
+    split_half_se_check,
     team_aggregate,
 )
 
@@ -93,6 +123,13 @@ MIN_ORACLE_TEAMS = 250
 #: gates (usable fraction, level bands) still apply. Nothing else may skip
 #: the external gate.
 UNGATED_SEASONS = {"mbb": set(), "wbb": set(range(2011, 2021))}
+
+#: Gate 5 (standard errors) -- frozen from the 2026-09-01 sweep, provenance in
+#: the module docstring. NEVER loosened to make a season pass.
+SIGMA2_BAND = {"mbb": (11000.0, 15000.0), "wbb": (10000.0, 14000.0)}
+SE_SPEARMAN_CEILING = -0.80
+SE_POSTERIOR_COVERAGE_FLOOR = 0.95
+SE_SAMPLING_COVERAGE_BAND = (0.92, 0.98)
 
 
 def _data_file(league: str, dataset: str, season: "int | None" = None) -> Path:
@@ -155,6 +192,15 @@ def run_season(
     bridge: pl.DataFrame,
     min_spearman: float,
 ) -> bool:
+    # Drop any prior manifest BEFORE the first gate can return: a gate failure
+    # (or an interruption) must leave NO manifest, so the publisher refuses the
+    # season. Otherwise a manifest from an earlier PASSING run outlives the new
+    # failure and republishes stale numbers beside a stale parquet.
+    stem = _DATA[league][2]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    f = out_dir / f"{stem}_rapm_league_{season}.parquet"
+    mf_path = f.with_suffix(".manifest.json")
+    mf_path.unlink(missing_ok=True)
     poss_f = _data_file(league, "possessions", season)
     ros_f = _data_file(league, "team_rosters", season)
     if not poss_f.is_file() or not ros_f.is_file():
@@ -214,6 +260,38 @@ def run_season(
             return False
         external_gate = "passed"
 
+    # Gate 5: the standard errors must behave like uncertainty (docstring item
+    # 5). Every comparison is written `not (ok)` so a NaN FAILS.
+    from scipy.stats import spearmanr
+
+    lo, hi = SIGMA2_BAND[league]
+    if not (lo <= info["sigma2"] <= hi):
+        _fail(season, f"sigma2 {info['sigma2']:.1f} outside [{lo}, {hi}]")
+        return False
+    p2 = players.with_columns((pl.col("off_poss") + pl.col("def_poss")).alias("poss"))
+    se_rho = float(spearmanr(p2["poss"].to_numpy(), p2["rapm_net_se"].to_numpy()).statistic)
+    if not (se_rho <= SE_SPEARMAN_CEILING):
+        _fail(season, f"Spearman(poss, rapm_net_se) {se_rho:.4f} > {SE_SPEARMAN_CEILING}")
+        return False
+    dec = possession_deciles(players)["median_rapm_net_se"]
+    se_bottom, se_top = float(dec[0]), float(dec[-1])
+    if not (se_top < se_bottom):
+        _fail(season, f"top-decile median SE {se_top:.3f} >= bottom-decile {se_bottom:.3f}")
+        return False
+    _pp, se_check = split_half_se_check(resolved, ridge_lambda=DEFAULT_RIDGE_LAMBDA)
+    if not (se_check["coverage_rapm_net"] >= SE_POSTERIOR_COVERAGE_FLOOR):
+        _fail(
+            season,
+            f"posterior-SE split-half coverage {se_check['coverage_rapm_net']:.4f} "
+            f"< {SE_POSTERIOR_COVERAGE_FLOOR}",
+        )
+        return False
+    for c in ("orapm", "drapm", "rapm_net"):
+        v = se_check[f"coverage_sampling_{c}"]
+        if not (SE_SAMPLING_COVERAGE_BAND[0] <= v <= SE_SAMPLING_COVERAGE_BAND[1]):
+            _fail(season, f"sampling-SE split-half coverage ({c}) {v:.4f} outside {SE_SAMPLING_COVERAGE_BAND}")
+            return False
+
     # Augment: identity + provenance columns.
     ros = rosters.select(
         pl.col("player_id").cast(pl.Utf8),
@@ -246,19 +324,15 @@ def run_season(
             "off_poss",
             "def_poss",
             "estimand",
+            # additive (2026-09-01): posterior standard errors
+            "orapm_se",
+            "drapm_se",
+            "rapm_net_se",
         )
         .sort("rapm_net", descending=True)
     )
     n_games = int(possessions["contest_id"].n_unique())
 
-    stem = _DATA[league][2]
-    out_dir.mkdir(parents=True, exist_ok=True)
-    f = out_dir / f"{stem}_rapm_league_{season}.parquet"
-    # Remove any prior manifest BEFORE the parquet changes -- an interruption
-    # between the two writes must leave NO manifest (-> refused), never a
-    # stale manifest beside a new parquet.
-    mf_path = f.with_suffix(".manifest.json")
-    mf_path.unlink(missing_ok=True)
     out.write_parquet(f)
     manifest = {
         "league": league,
@@ -281,6 +355,19 @@ def run_season(
         "external_gate": external_gate,
         "torvik_teams": rho_n,
         "torvik_spearman": rho,
+        # Gate 5 record (standard errors):
+        "sigma2": info["sigma2"],
+        "df_eff": info["df_eff"],
+        "hca_se": info["hca_se"],
+        "solve_max_abs_dev": info["solve_max_abs_dev"],
+        "se_spearman_poss": se_rho,
+        "se_median_bottom_decile": se_bottom,
+        "se_median_top_decile": se_top,
+        "se_split_games": [se_check["n_games_a"], se_check["n_games_b"]],
+        "se_split_players": se_check["n_players"],
+        "se_coverage_posterior_net": se_check["coverage_rapm_net"],
+        "se_coverage_sampling": {c: se_check[f"coverage_sampling_{c}"] for c in ("orapm", "drapm", "rapm_net")},
+        "se_zsd_sampling_net": se_check["z_sd_sampling_rapm_net"],
         "gates_passed": True,
     }
     mf_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
@@ -288,10 +375,70 @@ def run_season(
     g = f"rho={rho:.4f} (n={rho_n})" if rho is not None else external_gate
     print(
         f"  {season}: usable={frac:.2%} players={out.height} mu={info['intercept']:.2f} "
-        f"hca={info['hca']:.3f} person_id null={out['person_id'].null_count()} | {g} | wrote {f.name}",
+        f"hca={info['hca']:.3f} person_id null={out['person_id'].null_count()} | {g} | "
+        f"se: sigma2={info['sigma2']:.0f} rho={se_rho:.3f} cov_post={se_check['coverage_rapm_net']:.4f} "
+        f"cov_samp_net={se_check['coverage_sampling_rapm_net']:.4f} | wrote {f.name}",
         flush=True,
     )
     return True
+
+
+def write_card(league: str, out_dir: Path) -> Path:
+    """Evaluation card = the per-season gate record of the last full ``--all`` run.
+
+    Read by ``docs/models/rapm.qmd``; written only when EVERY season passed,
+    so a partial sweep never overwrites the frozen record.
+    """
+    from datetime import datetime, timezone
+
+    stem = _DATA[league][2]
+    seasons = []
+    # Iterate SEASONS, never glob: a stale or hand-made manifest left in out_dir
+    # would otherwise be written into the card as if it were part of this sweep.
+    # A missing manifest is a failure, not a skip -- the card claims a FULL run.
+    for season in SEASONS:
+        mf_path = out_dir / f"{stem}_rapm_league_{season}.manifest.json"
+        if not mf_path.exists():
+            raise FileNotFoundError(
+                f"evaluation card needs a manifest for every season in SEASONS; {mf_path.name} is missing. "
+                "Re-run the full --all sweep; the card is the record of one complete run."
+            )
+        mf = json.loads(mf_path.read_text(encoding="utf-8"))
+        rho = mf["torvik_spearman"]
+        seasons.append(
+            {
+                "season": mf["season"],
+                "usable": round(100.0 * mf["usable_fraction"], 2),
+                "players": mf["rows"],
+                "mu": round(mf["intercept"], 2),
+                "hca": round(mf["hca"], 3),
+                "rho": None if rho is None else round(rho, 4),
+                "n": mf["torvik_teams"],
+                "sigma2": round(mf["sigma2"], 1),
+                "se_spearman_poss": round(mf["se_spearman_poss"], 4),
+                "se_median_bottom_decile": round(mf["se_median_bottom_decile"], 3),
+                "se_median_top_decile": round(mf["se_median_top_decile"], 3),
+                "se_cov_posterior": round(mf["se_coverage_posterior_net"], 4),
+                "se_cov_sampling_orapm": round(mf["se_coverage_sampling"]["orapm"], 4),
+                "se_cov_sampling_drapm": round(mf["se_coverage_sampling"]["drapm"], 4),
+                "se_cov_sampling_net": round(mf["se_coverage_sampling"]["rapm_net"], 4),
+                "se_zsd_sampling_net": round(mf["se_zsd_sampling_net"], 4),
+            }
+        )
+    card = {
+        "model": f"{stem}_rapm (league-wide, Path B)",
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "sweep": f"local --all run of python/{stem}_model_01_rapm_league.py",
+        "lambda": float(DEFAULT_RIDGE_LAMBDA),
+        "se": (
+            "posterior sqrt(sigma2 * diag((X'WX + lambda I)^-1)) published; "
+            "sampling sqrt(diag(sigma2 * (M - lambda M^2))) drives the split-half gate"
+        ),
+        "seasons": seasons,
+    }
+    path = _HERE.parent / "docs" / "models" / f"{stem}_rapm_card.json"
+    path.write_text(json.dumps(card, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def main() -> int:
@@ -329,6 +476,8 @@ def main() -> int:
     bridge = person_bridge(a.league)
     ok = [run_season(a.league, s, Path(a.out), bridge, floor) for s in seasons]
     print(f"{sum(ok)}/{len(ok)} seasons passed all gates", flush=True)
+    if a.all and all(ok):
+        print(f"evaluation card -> {write_card(a.league, Path(a.out))}", flush=True)
     return 0 if all(ok) else 1
 
 

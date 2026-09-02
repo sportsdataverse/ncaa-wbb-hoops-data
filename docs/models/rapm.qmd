@@ -58,6 +58,22 @@ validation program — and the fitted value is *asserted* at run time, because
 the λ no-op incident (a ridge that silently fit unregularized) is exactly
 the class of bug that survives rank-based checks.
 
+**Uncertainty.** Every published row carries `orapm_se`, `drapm_se` and
+`rapm_net_se` — the ridge **posterior** standard errors,
+`sqrt(σ̂² · diag((XᵀWX + λI)⁻¹))`, with σ̂² the possession-weighted residual
+variance on n − df_eff degrees of freedom (df_eff = trace of the ridge hat
+matrix) and the net SE including the O/D posterior covariance. Under the
+prior the penalty encodes (β ~ N(0, σ²/λ)) this is a credible interval for
+the *true* impact: a low-minute player sits at ≈ 0 ± σ̂/√λ (≈ ±3.6 per
+component) and the interval tightens as the data separate a player from
+his lineups. The alternative, the frequentist sandwich covariance σ̂²·M(XᵀWX)M (its SEs are
+`sqrt` of the diagonal), is the
+*repeatability of the shrunk estimate*: it collapses toward 0 for a player
+the ridge pins at zero, so it is not an interval for the truth — but it is
+exactly what a refit can check, and the producer computes it as the
+calibration instrument for the published SEs (see *Uncertainty* below).
+The intercept is treated as fixed (its SE is ≈ 0.14 points per 100).
+
 **Feature engineering lives in the possession construction, not the
 regression**: substitution-window stint building, possession trimming (the
 usable-possession gate measures how much of a season survives), free-throw
@@ -142,10 +158,83 @@ plot shows the prior doing the work SHAP would otherwise reveal: low-minute
 players carry near-zero attributed effect because the data cannot separate
 them from their lineups.
 
+## Uncertainty
+
+```{python}
+#| fig-cap: "Posterior SE vs possessions, latest season — the SE falls with playing time, then flattens at a collinearity floor (a starter who never sits is confounded with his team's total)."
+se_plot = cur.with_columns((pl.col("off_poss") + pl.col("def_poss")).alias("poss"))
+(
+    ggplot(se_plot.to_pandas(), aes("poss", "rapm_net_se"))
+    + geom_point(alpha=0.12, color="#2a6f97", size=0.6)
+    + labs(x="total possessions", y="posterior SE of RAPM (pts / 100)",
+           title=f"Standard error vs playing time — {latest}")
+    + theme_minimal()
+)
+```
+
+```{python}
+from sportsdataverse.mbb.mbb_ncaa_rapm_league import possession_deciles
+dec = possession_deciles(cur).select("decile", "n", "poss_min", "poss_max", "median_rapm_net_se")
+gt_show(
+    GT(dec.to_pandas())
+    .tab_header(title=f"Median posterior SE by possession decile — {latest}",
+                subtitle="decile 0 = fewest possessions; the prior SD σ̂/√λ is the ceiling, the collinearity floor the plateau")
+    .fmt_number(columns="median_rapm_net_se", decimals=3)
+    .fmt_number(columns=["poss_min", "poss_max"], sep_mark=",", decimals=0)
+)
+```
+
+The published SE is validated on every season by a **split-half refit**:
+the season's games are split by the parity of `contest_id` (deterministic
+and roster-neutral — the halves differ by sampling noise, not by the
+development or transfer drift a date split would add), both halves are
+refit, and each player rated in both is checked for
+|β̂ₐ − β̂ᵦ| ≤ 2·sqrt(SEₐ² + SEᵦ²). Under the **sampling** SE this is the
+textbook calibration test and the coverage sits at the 0.954 nominal in
+every season — σ̂², the inverse and the O/D covariance are right.
+
+Under the published **posterior** SE the same test returns ≈ 1.0 coverage
+with a standardised-difference SD of ≈ 0.38 rather than 1.0. Read that
+plainly: **the published SE is conservative by ≈ 2.5×** (≈ 2.3× for
+1,000-plus-possession players) relative to how much the estimate actually
+moves between two halves of a season. That is not a defect — at λ = 1000
+the fit is prior-dominated, and a credible interval for the *true* impact
+is legitimately wider than the *repeatability* of a shrunk estimate — but
+it means the posterior coverage number is a one-sided guard against SEs
+that silently shrank, never evidence of nominal calibration.
+
+**What to do with it.** Use `rapm_net ± 2·rapm_net_se` as a deliberately
+cautious band: if it excludes zero the player is separated from the prior
+by the data, and overlapping bands (as in the leaders table below) mean a
+tier, not a ranking. Do NOT read it as the season-to-season or half-to-half
+wobble of the number — that spread is ≈ 2.5× tighter, and a consumer
+propagating the published SE into a difference-of-two-players test will be
+materially over-conservative.
+
+```{python}
+se_tbl = card_tbl.select("season", "sigma2", "se_spearman_poss", "se_median_bottom_decile",
+                         "se_median_top_decile", "se_cov_posterior", "se_cov_sampling_orapm",
+                         "se_cov_sampling_drapm", "se_cov_sampling_net", "se_zsd_sampling_net")
+gt_show(
+    GT(se_tbl.to_pandas())
+    .tab_header(title="Standard-error gates by season — frozen from the 2026-09-01 sweep (evaluation card)",
+                subtitle="split-half = odd vs even games; coverage = share of players whose other-half estimate lies within 2·sqrt(SE_A² + SE_B²); z-sd = SD of the standardised difference (1.0 when calibrated)")
+    .fmt_number(columns="sigma2", sep_mark=",", decimals=0)
+    .fmt_number(columns=["se_spearman_poss", "se_cov_posterior", "se_cov_sampling_orapm",
+                         "se_cov_sampling_drapm", "se_cov_sampling_net", "se_zsd_sampling_net"], decimals=3)
+    .fmt_number(columns=["se_median_bottom_decile", "se_median_top_decile"], decimals=2)
+    .cols_label(sigma2="σ̂²", se_spearman_poss="ρ(poss, SE)", se_median_bottom_decile="SE dec 0",
+                se_median_top_decile="SE dec 9", se_cov_posterior="cov (posterior)",
+                se_cov_sampling_orapm="cov O (sampling)", se_cov_sampling_drapm="cov D (sampling)",
+                se_cov_sampling_net="cov net (sampling)", se_zsd_sampling_net="z-sd (sampling)")
+)
+```
+
 ## Evaluation
 
 Two layers, both real. First, the **frozen gates from the 2026-08-24 full
-validation sweep** — publish-blocking (a failed season writes NOTHING;
+validation sweep** (gates 1–4) and the **2026-09-01 standard-error sweep**
+(gate 5) — publish-blocking (a failed season writes NOTHING;
 floors may only be raised):
 
 | gate | floor | observed (sweep) |
@@ -153,6 +242,11 @@ floors may only be raised):
 | usable-possession fraction | ≥ 0.65 | 2011+ min 0.7609 |
 | intercept era band (scale-bug catcher) | [83, 98] | 87.31–92.80 |
 | home-court advantage band | [1.0, 4.0] | in-band all seasons |
+| σ̂² era band (SE scale-bug catcher) | [10000, 14000] | 11,634–12,408 |
+| Spearman(possessions, rapm_net_se) | ≤ −0.80 | −0.950 to −0.872 |
+| top-decile median SE < bottom-decile median SE | strict | ratio 0.794–0.819 |
+| split-half coverage, posterior SE (rapm_net) | ≥ 0.95 | ≥ 0.9995 |
+| split-half coverage, sampling SE (O, D, net) | [0.92, 0.98] | 0.9397–0.9563 |
 | Torvik external (league-wide only) | ≥ 250 joined teams AND Spearman(team_net, adjem) ≥ 0.89 | min 0.9039 (the 2021 COVID season) |
 
 ```{python}
@@ -224,19 +318,22 @@ j = t.join(orc.filter(pl.col("season") == latest).select("team", "adjem"), on="t
 
 ```{python}
 top = (
-    cur.with_columns((pl.col("off_poss") + pl.col("def_poss")).alias("poss"))
+    cur.with_columns((pl.col("off_poss") + pl.col("def_poss")).alias("poss"),
+                     (pl.col("rapm_net") - 2 * pl.col("rapm_net_se")).alias("lo95"),
+                     (pl.col("rapm_net") + 2 * pl.col("rapm_net_se")).alias("hi95"))
     .filter(pl.col("poss") >= 800)
     .sort("rapm_net", descending=True).head(15)
-    .select("player", "team", "poss", "orapm", "drapm", "rapm_net")
+    .select("player", "team", "poss", "orapm", "drapm", "rapm_net", "rapm_net_se", "lo95", "hi95")
 )
 gt_show(
     GT(top.to_pandas())
     .tab_header(title=f"Top 15 league-wide RAPM — {latest} (min 800 possessions)",
-                subtitle="points per 100 possessions; no public headshot CDN exists for stats.ncaa.org player ids")
+                subtitle="points per 100 possessions; SE = posterior standard error, interval = RAPM ± 2·SE; no public headshot CDN exists for stats.ncaa.org player ids")
     .fmt_number(columns="poss", sep_mark=",", decimals=0)
-    .fmt_number(columns=["orapm", "drapm", "rapm_net"], decimals=2)
+    .fmt_number(columns=["orapm", "drapm", "rapm_net", "rapm_net_se", "lo95", "hi95"], decimals=2)
     .cols_label(player="Player", team="Team", poss="Poss",
-                orapm="O-RAPM", drapm="D-RAPM", rapm_net="RAPM")
+                orapm="O-RAPM", drapm="D-RAPM", rapm_net="RAPM", rapm_net_se="SE",
+                lo95="95% lo", hi95="95% hi")
 )
 ```
 
@@ -244,18 +341,26 @@ RAPM is a retrodictive on/off estimate: low-minute players shrink heavily
 toward zero, multicollinearity between players who always share the floor is
 resolved only by the prior, and the external Torvik gate validates
 TEAM-level aggregation, not individual ordering — which is why the results
-table applies a possession floor before ranking anyone.
+table applies a possession floor before ranking anyone. The intervals make
+the point directly: the top-15 bands overlap almost entirely, so the table
+is a tier, not a ranking.
 
 ## Provenance & reproducibility
 
 - **Trained on:** this repository's published `possessions` +
   `team_rosters` + `name_changes` trees, seasons 2011–2026 (2010 excluded by
   the usable-possession gate).
-- **Model:** ridge (λ = 1000, asserted at run time) via the sdv-py
-  `wbb_ncaa_rapm_league` engine; league-wide stage
+- **Model:** ridge (λ = 1000, asserted at run time) via the league-blind sdv-py
+  `mbb_ncaa_rapm_league` engine (WBB passes its own frames; there is no twin); league-wide stage
   `python/ncaa_wbb_model_01_rapm_league.py`, within-team stage
   `python/ncaa_wbb_model_02_rapm_within_team.py` (manual by design — needs
   the raw HTML bundle checkout).
+- **Standard errors:** posterior `sqrt(σ̂²·diag((XᵀWX+λI)⁻¹))` from one dense
+  Cholesky inverse of the (2P+1)-square penalised Gram matrix (≈10k, seconds);
+  the sampling SE `sqrt(diag(σ̂²(M − λM²)))` — `σ̂²(M − λM²)` is the sampling
+  COVARIANCE matrix — comes from the same inverse and drives the
+  split-half calibration gate (gate 5). Engine: sdv-py
+  `mbb_ncaa_rapm_league.solve_rapm_league` / `split_half_se_check`.
 - **Gates:** frozen in the table above; oracle fixture
   `ops/oracle/ncaa_wbb_torvik.parquet` (a NaN rho or missing oracle season is
   a FAILURE, never a skip). Runs append `models/ledger.jsonl`; publish is a
@@ -273,8 +378,13 @@ table applies a possession floor before ranking anyone.
   strongest public APM systems (catalogued in the APM research corpus): 3P%
   luck-adjusting the target, and informative priors by player archetype
   instead of a flat ridge.
-- **Exact standard errors** — the ridge posterior gives per-player SEs almost
-  for free; publishing them would turn point estimates into honest intervals.
+- **Resolved (2026-09-01, PR #17):** exact standard errors — the ridge
+  posterior SEs are published as `orapm_se` / `drapm_se` / `rapm_net_se`,
+  validated by a split-half calibration gate (sampling-SE coverage at the
+  0.954 nominal in every season) and shown as ±2·SE intervals above. Finding
+  worth keeping: at λ = 1000 the posterior SE is ≈2.3× the estimate's
+  repeatability even for 4,000-possession players — the prior, not the data,
+  sets most of the interval.
 - **Within-team CI** — Path A still requires the raw HTML bundle checkout; a
   store-backed runner would let it join the wired retrain.
 - **Known issue:** multi-year RAPM (stabilizing low-minute players across

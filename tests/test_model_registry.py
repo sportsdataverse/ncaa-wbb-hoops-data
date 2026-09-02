@@ -16,6 +16,8 @@ LEAGUE_GATE_TOKENS = [
     "Torvik",
     "0.89",
     "UNGATED_SEASONS",
+    "SE gate",
+    "0.92, 0.98",
 ]
 
 
