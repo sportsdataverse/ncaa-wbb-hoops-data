@@ -1,8 +1,9 @@
 {
   "model": "ncaa_wbb_rapm (league-wide, Path B)",
-  "generated": "2026-09-01T15:34:40+00:00",
+  "generated": "2026-09-02T04:38:51+00:00",
   "sweep": "local --all run of python/ncaa_wbb_model_01_rapm_league.py",
   "lambda": 1000.0,
+  "se": "posterior sqrt(sigma2 * diag((X'WX + lambda I)^-1)) published; sampling sigma2 * (M - lambda M^2) drives the split-half gate",
   "seasons": [
     {
       "season": 2011,
@@ -11,7 +12,16 @@
       "mu": 88.23,
       "hca": 2.716,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 11751.2,
+      "se_spearman_poss": -0.9121,
+      "se_median_bottom_decile": 4.794,
+      "se_median_top_decile": 3.831,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9481,
+      "se_cov_sampling_drapm": 0.9523,
+      "se_cov_sampling_net": 0.9462,
+      "se_zsd_sampling_net": 1.044
     },
     {
       "season": 2012,
@@ -20,7 +30,16 @@
       "mu": 87.42,
       "hca": 2.617,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 11633.9,
+      "se_spearman_poss": -0.9104,
+      "se_median_bottom_decile": 4.77,
+      "se_median_top_decile": 3.827,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9488,
+      "se_cov_sampling_drapm": 0.9525,
+      "se_cov_sampling_net": 0.9505,
+      "se_zsd_sampling_net": 1.0295
     },
     {
       "season": 2013,
@@ -29,7 +48,16 @@
       "mu": 87.31,
       "hca": 2.692,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 11739.5,
+      "se_spearman_poss": -0.9222,
+      "se_median_bottom_decile": 4.796,
+      "se_median_top_decile": 3.853,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9437,
+      "se_cov_sampling_drapm": 0.9471,
+      "se_cov_sampling_net": 0.9432,
+      "se_zsd_sampling_net": 1.0375
     },
     {
       "season": 2014,
@@ -38,7 +66,16 @@
       "mu": 92.23,
       "hca": 2.447,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 11944.4,
+      "se_spearman_poss": -0.9097,
+      "se_median_bottom_decile": 4.836,
+      "se_median_top_decile": 3.859,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9499,
+      "se_cov_sampling_drapm": 0.9507,
+      "se_cov_sampling_net": 0.945,
+      "se_zsd_sampling_net": 1.0497
     },
     {
       "season": 2015,
@@ -47,7 +84,16 @@
       "mu": 89.77,
       "hca": 2.533,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 11895.6,
+      "se_spearman_poss": -0.921,
+      "se_median_bottom_decile": 4.834,
+      "se_median_top_decile": 3.862,
+      "se_cov_posterior": 0.9995,
+      "se_cov_sampling_orapm": 0.9497,
+      "se_cov_sampling_drapm": 0.9485,
+      "se_cov_sampling_net": 0.9547,
+      "se_zsd_sampling_net": 1.0115
     },
     {
       "season": 2016,
@@ -56,7 +102,16 @@
       "mu": 89.82,
       "hca": 2.594,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 11952.4,
+      "se_spearman_poss": -0.9168,
+      "se_median_bottom_decile": 4.85,
+      "se_median_top_decile": 3.865,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9506,
+      "se_cov_sampling_drapm": 0.9528,
+      "se_cov_sampling_net": 0.9429,
+      "se_zsd_sampling_net": 1.0418
     },
     {
       "season": 2017,
@@ -65,7 +120,16 @@
       "mu": 90.8,
       "hca": 2.613,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 12120.5,
+      "se_spearman_poss": -0.9101,
+      "se_median_bottom_decile": 4.874,
+      "se_median_top_decile": 3.933,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9436,
+      "se_cov_sampling_drapm": 0.9513,
+      "se_cov_sampling_net": 0.9516,
+      "se_zsd_sampling_net": 1.0174
     },
     {
       "season": 2018,
@@ -74,7 +138,16 @@
       "mu": 91.68,
       "hca": 2.259,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 12165.1,
+      "se_spearman_poss": -0.9005,
+      "se_median_bottom_decile": 4.878,
+      "se_median_top_decile": 3.949,
+      "se_cov_posterior": 0.9998,
+      "se_cov_sampling_orapm": 0.9484,
+      "se_cov_sampling_drapm": 0.944,
+      "se_cov_sampling_net": 0.9472,
+      "se_zsd_sampling_net": 1.0468
     },
     {
       "season": 2019,
@@ -83,7 +156,16 @@
       "mu": 91.03,
       "hca": 2.386,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 12244.8,
+      "se_spearman_poss": -0.8913,
+      "se_median_bottom_decile": 4.902,
+      "se_median_top_decile": 3.915,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9495,
+      "se_cov_sampling_drapm": 0.9521,
+      "se_cov_sampling_net": 0.9488,
+      "se_zsd_sampling_net": 1.0346
     },
     {
       "season": 2020,
@@ -92,7 +174,16 @@
       "mu": 90.45,
       "hca": 2.29,
       "rho": null,
-      "n": null
+      "n": null,
+      "sigma2": 12229.6,
+      "se_spearman_poss": -0.8716,
+      "se_median_bottom_decile": 4.88,
+      "se_median_top_decile": 3.949,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9501,
+      "se_cov_sampling_drapm": 0.9445,
+      "se_cov_sampling_net": 0.9449,
+      "se_zsd_sampling_net": 1.0569
     },
     {
       "season": 2021,
@@ -101,7 +192,16 @@
       "mu": 91.67,
       "hca": 1.839,
       "rho": 0.9039,
-      "n": 326
+      "n": 326,
+      "sigma2": 12390.9,
+      "se_spearman_poss": -0.9496,
+      "se_median_bottom_decile": 4.936,
+      "se_median_top_decile": 4.041,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9495,
+      "se_cov_sampling_drapm": 0.9476,
+      "se_cov_sampling_net": 0.9471,
+      "se_zsd_sampling_net": 1.0315
     },
     {
       "season": 2022,
@@ -110,7 +210,16 @@
       "mu": 90.53,
       "hca": 2.142,
       "rho": 0.9723,
-      "n": 339
+      "n": 339,
+      "sigma2": 12215.4,
+      "se_spearman_poss": -0.9119,
+      "se_median_bottom_decile": 4.889,
+      "se_median_top_decile": 3.917,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9479,
+      "se_cov_sampling_drapm": 0.9563,
+      "se_cov_sampling_net": 0.9506,
+      "se_zsd_sampling_net": 1.0134
     },
     {
       "season": 2023,
@@ -119,7 +228,16 @@
       "mu": 91.38,
       "hca": 2.234,
       "rho": 0.9841,
-      "n": 347
+      "n": 347,
+      "sigma2": 12278.5,
+      "se_spearman_poss": -0.8892,
+      "se_median_bottom_decile": 4.895,
+      "se_median_top_decile": 3.9,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9504,
+      "se_cov_sampling_drapm": 0.9518,
+      "se_cov_sampling_net": 0.9457,
+      "se_zsd_sampling_net": 1.024
     },
     {
       "season": 2024,
@@ -128,7 +246,16 @@
       "mu": 91.72,
       "hca": 2.307,
       "rho": 0.9864,
-      "n": 346
+      "n": 346,
+      "sigma2": 12290.0,
+      "se_spearman_poss": -0.8921,
+      "se_median_bottom_decile": 4.906,
+      "se_median_top_decile": 3.902,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.943,
+      "se_cov_sampling_drapm": 0.9484,
+      "se_cov_sampling_net": 0.9416,
+      "se_zsd_sampling_net": 1.0533
     },
     {
       "season": 2025,
@@ -137,7 +264,16 @@
       "mu": 91.91,
       "hca": 2.402,
       "rho": 0.98,
-      "n": 349
+      "n": 349,
+      "sigma2": 12408.1,
+      "se_spearman_poss": -0.8913,
+      "se_median_bottom_decile": 4.92,
+      "se_median_top_decile": 3.922,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.944,
+      "se_cov_sampling_drapm": 0.9518,
+      "se_cov_sampling_net": 0.9416,
+      "se_zsd_sampling_net": 1.0416
     },
     {
       "season": 2026,
@@ -146,19 +282,16 @@
       "mu": 91.69,
       "hca": 2.41,
       "rho": 0.9823,
-      "n": 349
+      "n": 349,
+      "sigma2": 12381.8,
+      "se_spearman_poss": -0.8769,
+      "se_median_bottom_decile": 4.906,
+      "se_median_top_decile": 3.894,
+      "se_cov_posterior": 1.0,
+      "se_cov_sampling_orapm": 0.9524,
+      "se_cov_sampling_drapm": 0.947,
+      "se_cov_sampling_net": 0.9397,
+      "se_zsd_sampling_net": 1.0427
     }
-  ],
-  "gates": {
-    "usable_fraction_floor": 0.65,
-    "intercept_band": [
-      83,
-      98
-    ],
-    "hca_band": [
-      1.0,
-      4.0
-    ],
-    "torvik_spearman_floor": 0.89
-  }
+  ]
 }
