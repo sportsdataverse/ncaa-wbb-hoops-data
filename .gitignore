@@ -189,3 +189,14 @@ wbb/_release_build/**/*.rds
 
 # HTTP-mode raw-JSON cache (see python/ncaa_wbb_data_build/ingest.py)
 .ncaa_wbb_raw_cache/
+# Agent / tooling state -- local scratch; ignore untracked contents.
+.omc/
+**/.omc/
+.understand-anything/
+**/.understand-anything/
+
+# Model run artifacts. .github/workflows/ncaa_wbb_models.yml uploads both of
+# these via actions/upload-artifact ("publish stays manual", 30-day retention),
+# so they are build OUTPUT, not tracked files. ops/ tracks the scripts only.
+models/ledger.jsonl
+ops/out_league/
