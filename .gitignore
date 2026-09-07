@@ -189,7 +189,7 @@ wbb/_release_build/**/*.rds
 
 # HTTP-mode raw-JSON cache (see python/ncaa_wbb_data_build/ingest.py)
 .ncaa_wbb_raw_cache/
-# Agent / tooling state -- local scratch, never part of the repo.
+# Agent / tooling state -- local scratch; ignore untracked contents.
 .omc/
 **/.omc/
 .understand-anything/
