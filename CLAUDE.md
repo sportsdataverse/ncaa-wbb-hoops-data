@@ -143,6 +143,8 @@ uv run ruff check python tests
 SEASON=2025 bash scripts/run_build.sh                 # build (offline)
 SEASON=2025 DATASET=shots bash scripts/run_build.sh
 SEASON=2025 bash scripts/run_publish.sh               # build + upload via gh
+bash scripts/cron_publish_current.sh                  # droplet cron, Nov-Apr: current season
+                                                      # build + publish + 99 master + commit wbb/
 ```
 
 `run_build.sh` defaults `NCAA_WBB_RAW_ROOT` to the sibling
