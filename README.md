@@ -405,16 +405,18 @@ Every dataset has an R loader in wehoop and a Python loader in sportsdataverse-p
 
 ## Join keys
 
-Ids from stats.ncaa.org are stored as **strings** here. The ESPN datasets in
-[`wehoop-wbb-data`](https://github.com/sportsdataverse/wehoop-wbb-data) store theirs as
-integers, so cast before joining across the two.
+Ids from stats.ncaa.org are stored as **strings** here and are a different id space
+from ESPN's: casting one does not turn it into an ESPN id. To join to the ESPN datasets
+in [`wehoop-wbb-data`](https://github.com/sportsdataverse/wehoop-wbb-data), use the `espn_*`
+bridge columns below (`espn_game_id`, `*_espn_team_id`, `shots.espn_team_id`). Those are
+strings here and integers in `wehoop-wbb-data`, so cast the bridge column before joining.
 
 | column | joins to |
 | --- | --- |
 | `contest_id` | stats.ncaa.org game id. `schedule` has one row per game; every per-game dataset keys on it. |
-| `player_id`, `player_1_id` / `player_2_id`, `home_N_player_id` / `away_N_player_id`, `shots.shooter_player_id` | stats.ncaa.org player id; joins `team_rosters.player_id`. |
-| `*_ncaa_team_id`, `shots.ncaa_team_id` | stats.ncaa.org team id; joins `team_rosters.team_id`. |
-| `lineup_key`, `matchup_stints.home_lineup_key` / `away_lineup_key` | joins `lineups.lineup_key`. |
+| `player_id`, `player_1_id` / `player_2_id`, `home_N_player_id` / `away_N_player_id`, `shots.shooter_player_id` | stats.ncaa.org player id; joins `team_rosters.player_id`. `team_rosters` has one row per player per team per season, and stats.ncaa.org issues new player and team ids every season (no 2025 id recurs in 2026), so these join only within the same season. |
+| `*_ncaa_team_id`, `shots.ncaa_team_id` | stats.ncaa.org team id; joins `team_rosters.team_id`. Season-specific, like `player_id`. |
+| `lineup_key`, `matchup_stints.home_lineup_key` / `away_lineup_key` | joins `lineups.lineup_key`. The key names a team's five-player unit, not a game or stint: `lineups` has one row per unit per stint (unique on `contest_id` + `team` + `stint_num`), so a key recurs across games (up to 36 in 2025) and within a game (up to 15 stints). A join on `lineup_key` alone, or on `contest_id` + `lineup_key`, multiplies rows; aggregate `lineups` to the grain you need first. |
 | `espn_game_id` | ESPN game id; joins `game_id` in `wehoop-wbb-data` (`schedules`, `pbp`, `team_box`, ...). |
 | `*_espn_team_id`, `shots.espn_team_id` | ESPN team id; joins `team_id` in `wehoop-wbb-data`. |
 
