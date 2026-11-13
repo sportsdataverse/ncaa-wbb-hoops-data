@@ -382,12 +382,41 @@ across the write/read round-trip, and holds the dtype-discipline contract
 2025 because the committed fixtures are season-2025 games -- see "Season
 coverage" above.
 
-## sdv-py loader wiring (deferred)
+## Load it
 
-Wiring these datasets into sdv-py's `wbb_loaders` is a follow-up task, done
-*after* the first real publish. The loader introspects the live published
-parquet's footer schema, so it can't be generated until a real `ncaa_wbb_*`
-release exists on `sportsdataverse/sportsdataverse-data`.
+Every dataset has an R loader in wehoop and a Python loader in sportsdataverse-py
+(`sportsdataverse.wbb`); each reads the dataset's `ncaa_wbb_<dataset>` release tag on
+`sportsdataverse/sportsdataverse-data`. The RAPM model tags have their own loaders
+(`load_ncaa_wbb_rapm()`, `load_ncaa_wbb_rapm_within_team()`).
+
+| dataset | R | Python |
+| --- | --- | --- |
+| `team_ids` | `wehoop::load_ncaa_wbb_team_ids()` | `sportsdataverse.wbb.load_ncaa_wbb_team_ids()` |
+| `schedule` | `wehoop::load_ncaa_wbb_schedule()` | `sportsdataverse.wbb.load_ncaa_wbb_schedule()` |
+| `team_rosters` | `wehoop::load_ncaa_wbb_team_rosters()` | `sportsdataverse.wbb.load_ncaa_wbb_team_rosters()` |
+| `rosters` | `wehoop::load_ncaa_wbb_rosters()` | `sportsdataverse.wbb.load_ncaa_wbb_rosters()` |
+| `pbp` | `wehoop::load_ncaa_wbb_pbp()` | `sportsdataverse.wbb.load_ncaa_wbb_pbp()` |
+| `player_box` | `wehoop::load_ncaa_wbb_player_box()` | `sportsdataverse.wbb.load_ncaa_wbb_player_box()` |
+| `team_box` | `wehoop::load_ncaa_wbb_team_box()` | `sportsdataverse.wbb.load_ncaa_wbb_team_box()` |
+| `lineups` | `wehoop::load_ncaa_wbb_lineups()` | `sportsdataverse.wbb.load_ncaa_wbb_lineups()` |
+| `matchup_stints` | `wehoop::load_ncaa_wbb_matchup_stints()` | `sportsdataverse.wbb.load_ncaa_wbb_matchup_stints()` |
+| `possessions` | `wehoop::load_ncaa_wbb_possessions()` | `sportsdataverse.wbb.load_ncaa_wbb_possessions()` |
+| `shots` | `wehoop::load_ncaa_wbb_shots()` | `sportsdataverse.wbb.load_ncaa_wbb_shots()` |
+
+## Join keys
+
+Ids from stats.ncaa.org are stored as **strings** here. The ESPN datasets in
+[`wehoop-wbb-data`](https://github.com/sportsdataverse/wehoop-wbb-data) store theirs as
+integers, so cast before joining across the two.
+
+| column | joins to |
+| --- | --- |
+| `contest_id` | stats.ncaa.org game id. `schedule` has one row per game; every per-game dataset keys on it. |
+| `player_id`, `player_1_id` / `player_2_id`, `home_N_player_id` / `away_N_player_id`, `shots.shooter_player_id` | stats.ncaa.org player id; joins `team_rosters.player_id`. |
+| `*_ncaa_team_id`, `shots.ncaa_team_id` | stats.ncaa.org team id; joins `team_rosters.team_id`. |
+| `lineup_key`, `matchup_stints.home_lineup_key` / `away_lineup_key` | joins `lineups.lineup_key`. |
+| `espn_game_id` | ESPN game id; joins `game_id` in `wehoop-wbb-data` (`schedules`, `pbp`, `team_box`, ...). |
+| `*_espn_team_id`, `shots.espn_team_id` | ESPN team id; joins `team_id` in `wehoop-wbb-data`. |
 
 ## Player name changes (`wbb/name_changes/`)
 
